@@ -29,6 +29,8 @@ export const config = {
   nodeEnv: process.env.NODE_ENV ?? "development",
   databaseUrl: requireDatabaseUrl(),
   corsOrigin: process.env.CORS_ORIGIN ?? "http://localhost:5173",
+  exchange: process.env.EXCHANGE ?? "gemini",
+  geminiBaseUrl: process.env.GEMINI_BASE_URL ?? "https://api.gemini.com",
   isDev: (process.env.NODE_ENV ?? "development") !== "production",
   isProd: process.env.NODE_ENV === "production",
 } as const;
