@@ -1,7 +1,15 @@
+import { Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import { getTicker, listSymbols } from "../api/markets";
+import {
+  addWatchlistItem,
+  getWatchlist,
+  removeWatchlistItem,
+} from "../api/watchlist";
+import { useAuth } from "../contexts/AuthContext";
 import { useMarketStream } from "../hooks/useMarketStream";
 import type { Ticker } from "../types/market";
+import type { Watchlist } from "../types/watchlist";
 import styles from "./MarketsPage.module.css";
 
 type PageState =
@@ -18,8 +26,20 @@ type PageState =
 
 const DEFAULT_SYMBOL = "BTC-USD";
 
+function formatPrice(value: number) {
+  return value.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
 export default function MarketsPage() {
+  const { isAuthenticated } = useAuth();
   const [state, setState] = useState<PageState>({ status: "loading" });
+  const [watchlist, setWatchlist] = useState<Watchlist | null>(null);
+  const [watchlistLoading, setWatchlistLoading] = useState(false);
+  const [watchlistError, setWatchlistError] = useState<string | null>(null);
+  const [watchlistAction, setWatchlistAction] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -55,6 +75,40 @@ export default function MarketsPage() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setWatchlist(null);
+      return;
+    }
+
+    let cancelled = false;
+    setWatchlistLoading(true);
+    setWatchlistError(null);
+
+    getWatchlist()
+      .then((data) => {
+        if (!cancelled) {
+          setWatchlist(data);
+        }
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setWatchlistError(
+            err instanceof Error ? err.message : "Failed to load watchlist",
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setWatchlistLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated]);
 
   const activeSymbol =
     state.status === "success" ? state.selectedSymbol : undefined;
@@ -134,11 +188,47 @@ export default function MarketsPage() {
     };
   }, [state, tickerUpdate, lastTradePrice]);
 
-  const formatPrice = (value: number) =>
-    value.toLocaleString(undefined, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
+  const watchlistHasSymbol =
+    state.status === "success" &&
+    watchlist?.items.some((item) => item.symbol === state.selectedSymbol);
+
+  async function handleWatchlistToggle() {
+    if (state.status !== "success" || !isAuthenticated) {
+      return;
+    }
+
+    setWatchlistAction(state.selectedSymbol);
+    setWatchlistError(null);
+
+    try {
+      const updated = watchlistHasSymbol
+        ? await removeWatchlistItem(state.selectedSymbol)
+        : await addWatchlistItem(state.selectedSymbol);
+      setWatchlist(updated);
+    } catch (err) {
+      setWatchlistError(
+        err instanceof Error ? err.message : "Failed to update watchlist",
+      );
+    } finally {
+      setWatchlistAction(null);
+    }
+  }
+
+  async function handleRemoveFromWatchlist(symbol: string) {
+    setWatchlistAction(symbol);
+    setWatchlistError(null);
+
+    try {
+      const updated = await removeWatchlistItem(symbol);
+      setWatchlist(updated);
+    } catch (err) {
+      setWatchlistError(
+        err instanceof Error ? err.message : "Failed to remove symbol",
+      );
+    } finally {
+      setWatchlistAction(null);
+    }
+  }
 
   if (state.status === "loading") {
     return (
@@ -182,65 +272,148 @@ export default function MarketsPage() {
         </span>
       </div>
 
-      <label className={styles.field}>
-        <span className={styles.label}>Trading pair</span>
-        <select
-          className={styles.select}
-          value={selectedSymbol}
-          onChange={(event) =>
-            setState({
-              ...state,
-              selectedSymbol: event.target.value,
-              ticker: null,
-              tickerLoading: true,
-              tickerError: null,
-            })
-          }
-        >
-          {symbols.map((symbol) => (
-            <option key={symbol} value={symbol}>
-              {symbol}
-            </option>
-          ))}
-        </select>
-      </label>
+      <div className={styles.layout}>
+        <div className={styles.mainColumn}>
+          <label className={styles.field}>
+            <span className={styles.label}>Trading pair</span>
+            <select
+              className={styles.select}
+              value={selectedSymbol}
+              onChange={(event) =>
+                setState({
+                  ...state,
+                  selectedSymbol: event.target.value,
+                  ticker: null,
+                  tickerLoading: true,
+                  tickerError: null,
+                })
+              }
+            >
+              {symbols.map((symbol) => (
+                <option key={symbol} value={symbol}>
+                  {symbol}
+                </option>
+              ))}
+            </select>
+          </label>
 
-      {tickerLoading && <p className={styles.message}>Loading ticker…</p>}
+          {isAuthenticated && (
+            <button
+              className={styles.watchlistButton}
+              type="button"
+              disabled={watchlistAction !== null}
+              onClick={() => void handleWatchlistToggle()}
+            >
+              {watchlistAction === selectedSymbol
+                ? "Saving…"
+                : watchlistHasSymbol
+                  ? "Remove from watchlist"
+                  : "Add to watchlist"}
+            </button>
+          )}
 
-      {tickerError && (
-        <div className={styles.error} role="alert">
-          {tickerError}
+          {tickerLoading && <p className={styles.message}>Loading ticker…</p>}
+
+          {tickerError && (
+            <div className={styles.error} role="alert">
+              {tickerError}
+            </div>
+          )}
+
+          {displayTicker && !tickerLoading && (
+            <div className={styles.tickerCard}>
+              <div className={styles.tickerHeader}>
+                <h2 className={styles.symbol}>{displayTicker.symbol}</h2>
+                <p className={styles.updatedAt}>
+                  Last update:{" "}
+                  {new Date(displayTicker.updatedAt).toLocaleTimeString()}
+                </p>
+              </div>
+              <dl className={styles.stats}>
+                <div>
+                  <dt>Last</dt>
+                  <dd>${formatPrice(displayTicker.last)}</dd>
+                </div>
+                <div>
+                  <dt>Bid</dt>
+                  <dd>${formatPrice(displayTicker.bid)}</dd>
+                </div>
+                <div>
+                  <dt>Ask</dt>
+                  <dd>${formatPrice(displayTicker.ask)}</dd>
+                </div>
+                <div>
+                  <dt>24h Volume</dt>
+                  <dd>${displayTicker.volume24h.toLocaleString()}</dd>
+                </div>
+              </dl>
+            </div>
+          )}
         </div>
-      )}
 
-      {displayTicker && !tickerLoading && (
-        <div className={styles.tickerCard}>
-          <div className={styles.tickerHeader}>
-            <h2 className={styles.symbol}>{displayTicker.symbol}</h2>
-            <p className={styles.updatedAt}>
-              Last update: {new Date(displayTicker.updatedAt).toLocaleTimeString()}
+        <aside className={styles.watchlistPanel}>
+          <h2 className={styles.watchlistTitle}>Watchlist</h2>
+
+          {!isAuthenticated && (
+            <p className={styles.message}>
+              <Link className={styles.link} to="/login">
+                Log in
+              </Link>{" "}
+              to save symbols.
             </p>
-          </div>
-          <dl className={styles.stats}>
-            <div>
-              <dt>Last</dt>
-              <dd>${formatPrice(displayTicker.last)}</dd>
+          )}
+
+          {isAuthenticated && watchlistLoading && (
+            <p className={styles.message}>Loading watchlist…</p>
+          )}
+
+          {isAuthenticated && watchlistError && (
+            <div className={styles.error} role="alert">
+              {watchlistError}
             </div>
-            <div>
-              <dt>Bid</dt>
-              <dd>${formatPrice(displayTicker.bid)}</dd>
-            </div>
-            <div>
-              <dt>Ask</dt>
-              <dd>${formatPrice(displayTicker.ask)}</dd>
-            </div>
-            <div>
-              <dt>24h Volume</dt>
-              <dd>${displayTicker.volume24h.toLocaleString()}</dd>
-            </div>
-          </dl>
-        </div>
-      )}
+          )}
+
+          {isAuthenticated && !watchlistLoading && watchlist?.items.length === 0 && (
+            <p className={styles.message}>No saved symbols yet.</p>
+          )}
+
+          {isAuthenticated && watchlist && watchlist.items.length > 0 && (
+            <ul className={styles.watchlistList}>
+              {watchlist.items.map((item) => (
+                <li key={item.id} className={styles.watchlistItem}>
+                  <button
+                    className={styles.watchlistSymbolButton}
+                    type="button"
+                    onClick={() =>
+                      setState({
+                        ...state,
+                        selectedSymbol: item.symbol,
+                        ticker: null,
+                        tickerLoading: true,
+                        tickerError: null,
+                      })
+                    }
+                  >
+                    <span>{item.symbol}</span>
+                    <span>
+                      {item.last === null ? "—" : `$${formatPrice(item.last)}`}
+                    </span>
+                  </button>
+                  <button
+                    className={styles.removeButton}
+                    type="button"
+                    aria-label={`Remove ${item.symbol}`}
+                    disabled={watchlistAction !== null}
+                    onClick={() => void handleRemoveFromWatchlist(item.symbol)}
+                  >
+                    ×
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </aside>
+      </div>
     </section>
   );
 }
