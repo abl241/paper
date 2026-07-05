@@ -10,3 +10,11 @@ export function parseDecimal(value: string | number | null | undefined): number 
 
   return parsed;
 }
+
+export function roundAmount(value: number, decimals = 8): number {
+  return Number(value.toFixed(decimals));
+}
+
+export function roundUsd(value: number): number {
+  return roundAmount(value, 2);
+}

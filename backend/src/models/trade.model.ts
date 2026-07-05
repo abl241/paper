@@ -1,3 +1,4 @@
+import type { PoolClient } from "pg";
 import { pool } from "../config/database.js";
 import type { Trade } from "../types/portfolio.js";
 import { parseDecimal } from "../utils/decimal.js";
@@ -24,6 +25,34 @@ function mapTrade(row: TradeRow): Trade {
     realizedPnL: row.realized_pnl === null ? null : parseDecimal(row.realized_pnl),
     executedAt: row.executed_at,
   };
+}
+
+export async function insertTrade(
+  client: PoolClient,
+  input: {
+    userId: string;
+    symbol: string;
+    side: "buy" | "sell";
+    quantity: number;
+    executionPrice: number;
+    realizedPnL: number | null;
+  },
+): Promise<Trade> {
+  const result = await client.query<TradeRow>(
+    `INSERT INTO trades (user_id, symbol, side, quantity, execution_price, realized_pnl)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     RETURNING id, user_id, symbol, side, quantity, execution_price, realized_pnl, executed_at`,
+    [
+      input.userId,
+      input.symbol,
+      input.side,
+      input.quantity,
+      input.executionPrice,
+      input.realizedPnL,
+    ],
+  );
+
+  return mapTrade(result.rows[0]);
 }
 
 export async function findTradesByUserId(userId: string): Promise<Trade[]> {

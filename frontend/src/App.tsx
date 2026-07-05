@@ -6,8 +6,8 @@ import HomePage from "./pages/HomePage";
 import LoginPage from "./pages/LoginPage";
 import MarketsPage from "./pages/MarketsPage";
 import PortfolioPage from "./pages/PortfolioPage";
-import PlaceholderPage from "./pages/PlaceholderPage";
 import RegisterPage from "./pages/RegisterPage";
+import TradePage from "./pages/TradePage";
 
 export default function App() {
   return (
@@ -29,7 +29,7 @@ export default function App() {
           path="trade"
           element={
             <ProtectedRoute>
-              <PlaceholderPage title="Trade" />
+              <TradePage />
             </ProtectedRoute>
           }
         />

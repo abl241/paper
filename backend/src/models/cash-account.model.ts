@@ -1,3 +1,4 @@
+import type { PoolClient } from "pg";
 import { pool } from "../config/database.js";
 import type { CashAccount } from "../types/portfolio.js";
 import { parseDecimal } from "../utils/decimal.js";
@@ -29,6 +30,37 @@ export async function findCashAccountByUserId(
   );
 
   return result.rows[0] ? mapCashAccount(result.rows[0]) : null;
+}
+
+export async function findCashAccountForUpdate(
+  client: PoolClient,
+  userId: string,
+): Promise<CashAccount | null> {
+  const result = await client.query<CashAccountRow>(
+    `SELECT user_id, balance, created_at, updated_at
+     FROM cash_accounts
+     WHERE user_id = $1
+     FOR UPDATE`,
+    [userId],
+  );
+
+  return result.rows[0] ? mapCashAccount(result.rows[0]) : null;
+}
+
+export async function updateCashBalance(
+  client: PoolClient,
+  userId: string,
+  balance: number,
+): Promise<CashAccount> {
+  const result = await client.query<CashAccountRow>(
+    `UPDATE cash_accounts
+     SET balance = $2, updated_at = NOW()
+     WHERE user_id = $1
+     RETURNING user_id, balance, created_at, updated_at`,
+    [userId, balance],
+  );
+
+  return mapCashAccount(result.rows[0]);
 }
 
 export async function createCashAccount(
