@@ -24,6 +24,22 @@ function requireDatabaseUrl(): string {
   return url;
 }
 
+function requireJwtSecret(): string {
+  const secret = process.env.JWT_SECRET?.trim();
+  if (!secret) {
+    throw new Error("JWT_SECRET is required");
+  }
+  return secret;
+}
+
+function parseStartingCashBalance(value: string | undefined): number {
+  const parsed = Number(value ?? 100_000);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error(`Invalid STARTING_CASH_BALANCE: ${value}`);
+  }
+  return parsed;
+}
+
 export const config = {
   port: parsePort(process.env.PORT, 3001),
   nodeEnv: process.env.NODE_ENV ?? "development",
@@ -31,6 +47,10 @@ export const config = {
   corsOrigin: process.env.CORS_ORIGIN ?? "http://localhost:5173",
   exchange: process.env.EXCHANGE ?? "gemini",
   geminiBaseUrl: process.env.GEMINI_BASE_URL ?? "https://api.gemini.com",
+  geminiWsUrl: process.env.GEMINI_WS_URL ?? "wss://ws.gemini.com",
+  jwtSecret: requireJwtSecret(),
+  jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? "7d",
+  startingCashBalance: parseStartingCashBalance(process.env.STARTING_CASH_BALANCE),
   isDev: (process.env.NODE_ENV ?? "development") !== "production",
   isProd: process.env.NODE_ENV === "production",
 } as const;

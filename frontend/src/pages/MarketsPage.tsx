@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getTicker, listSymbols } from "../api/markets";
+import { useMarketStream } from "../hooks/useMarketStream";
 import type { Ticker } from "../types/market";
 import styles from "./MarketsPage.module.css";
 
@@ -58,6 +59,9 @@ export default function MarketsPage() {
   const activeSymbol =
     state.status === "success" ? state.selectedSymbol : undefined;
 
+  const { connectionState, tickerUpdate, lastTradePrice } =
+    useMarketStream(activeSymbol);
+
   useEffect(() => {
     if (!activeSymbol) {
       return;
@@ -112,6 +116,30 @@ export default function MarketsPage() {
     };
   }, [activeSymbol]);
 
+  const displayTicker = useMemo(() => {
+    if (state.status !== "success" || !state.ticker) {
+      return null;
+    }
+
+    const bid = tickerUpdate?.bid ?? state.ticker.bid;
+    const ask = tickerUpdate?.ask ?? state.ticker.ask;
+    const last = lastTradePrice ?? tickerUpdate?.last ?? state.ticker.last;
+
+    return {
+      ...state.ticker,
+      bid,
+      ask,
+      last,
+      updatedAt: tickerUpdate?.timestamp ?? state.ticker.timestamp,
+    };
+  }, [state, tickerUpdate, lastTradePrice]);
+
+  const formatPrice = (value: number) =>
+    value.toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+
   if (state.status === "loading") {
     return (
       <section className={styles.page}>
@@ -132,12 +160,27 @@ export default function MarketsPage() {
     );
   }
 
-  const { symbols, selectedSymbol, ticker, tickerLoading, tickerError } = state;
+  const { symbols, selectedSymbol, tickerLoading, tickerError } = state;
 
   return (
     <section className={styles.page}>
-      <h1 className={styles.title}>Markets</h1>
-      <p className={styles.lead}>Live prices from Gemini via the backend market service.</p>
+      <div className={styles.headerRow}>
+        <div>
+          <h1 className={styles.title}>Markets</h1>
+          <p className={styles.lead}>
+            Live prices from Gemini via the backend WebSocket relay.
+          </p>
+        </div>
+        <span
+          className={
+            connectionState === "connected"
+              ? `${styles.liveBadge} ${styles.liveBadgeActive}`
+              : styles.liveBadge
+          }
+        >
+          {connectionState === "connected" ? "Live" : "Connecting…"}
+        </span>
+      </div>
 
       <label className={styles.field}>
         <span className={styles.label}>Trading pair</span>
@@ -170,25 +213,30 @@ export default function MarketsPage() {
         </div>
       )}
 
-      {ticker && !tickerLoading && (
+      {displayTicker && !tickerLoading && (
         <div className={styles.tickerCard}>
-          <h2 className={styles.symbol}>{ticker.symbol}</h2>
+          <div className={styles.tickerHeader}>
+            <h2 className={styles.symbol}>{displayTicker.symbol}</h2>
+            <p className={styles.updatedAt}>
+              Last update: {new Date(displayTicker.updatedAt).toLocaleTimeString()}
+            </p>
+          </div>
           <dl className={styles.stats}>
             <div>
               <dt>Last</dt>
-              <dd>${ticker.last.toLocaleString()}</dd>
+              <dd>${formatPrice(displayTicker.last)}</dd>
             </div>
             <div>
               <dt>Bid</dt>
-              <dd>${ticker.bid.toLocaleString()}</dd>
+              <dd>${formatPrice(displayTicker.bid)}</dd>
             </div>
             <div>
               <dt>Ask</dt>
-              <dd>${ticker.ask.toLocaleString()}</dd>
+              <dd>${formatPrice(displayTicker.ask)}</dd>
             </div>
             <div>
               <dt>24h Volume</dt>
-              <dd>${ticker.volume24h.toLocaleString()}</dd>
+              <dd>${displayTicker.volume24h.toLocaleString()}</dd>
             </div>
           </dl>
         </div>
