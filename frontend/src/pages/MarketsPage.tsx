@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
-import { getTicker, listSymbols } from "../api/markets";
+import { getCandles, getTicker, listSymbols } from "../api/markets";
 import {
   addWatchlistItem,
   getWatchlist,
@@ -8,9 +8,13 @@ import {
 } from "../api/watchlist";
 import { useAuth } from "../contexts/AuthContext";
 import { useMarketStream } from "../hooks/useMarketStream";
-import type { Ticker } from "../types/market";
+import type { Candle, Ticker } from "../types/market";
 import type { Watchlist } from "../types/watchlist";
+import PriceChart from "../components/charts/PriceChart";
 import styles from "./MarketsPage.module.css";
+
+const CHART_INTERVALS = ["1h", "6h", "1d"] as const;
+type ChartInterval = (typeof CHART_INTERVALS)[number];
 
 type PageState =
   | { status: "loading" }
@@ -40,6 +44,10 @@ export default function MarketsPage() {
   const [watchlistLoading, setWatchlistLoading] = useState(false);
   const [watchlistError, setWatchlistError] = useState<string | null>(null);
   const [watchlistAction, setWatchlistAction] = useState<string | null>(null);
+  const [chartInterval, setChartInterval] = useState<ChartInterval>("1h");
+  const [candles, setCandles] = useState<Candle[]>([]);
+  const [candlesLoading, setCandlesLoading] = useState(false);
+  const [candlesError, setCandlesError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -169,6 +177,40 @@ export default function MarketsPage() {
       cancelled = true;
     };
   }, [activeSymbol]);
+
+  useEffect(() => {
+    if (!activeSymbol) {
+      return;
+    }
+
+    let cancelled = false;
+    setCandlesLoading(true);
+    setCandlesError(null);
+
+    getCandles(activeSymbol, chartInterval)
+      .then((data) => {
+        if (!cancelled) {
+          setCandles(data);
+        }
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setCandlesError(
+            err instanceof Error ? err.message : "Failed to load chart data",
+          );
+          setCandles([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setCandlesLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSymbol, chartInterval]);
 
   const displayTicker = useMemo(() => {
     if (state.status !== "success" || !state.ticker) {
@@ -349,6 +391,46 @@ export default function MarketsPage() {
               </dl>
             </div>
           )}
+
+          <section className={styles.chartSection}>
+            <div className={styles.chartHeader}>
+              <h2 className={styles.chartTitle}>Price history</h2>
+              <div className={styles.intervalGroup}>
+                {CHART_INTERVALS.map((interval) => (
+                  <button
+                    key={interval}
+                    type="button"
+                    className={
+                      chartInterval === interval
+                        ? `${styles.intervalButton} ${styles.intervalButtonActive}`
+                        : styles.intervalButton
+                    }
+                    onClick={() => setChartInterval(interval)}
+                  >
+                    {interval}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {candlesLoading && (
+              <p className={styles.message}>Loading chart data…</p>
+            )}
+
+            {candlesError && (
+              <div className={styles.error} role="alert">
+                {candlesError}
+              </div>
+            )}
+
+            {!candlesLoading && !candlesError && (
+              <PriceChart
+                symbol={selectedSymbol}
+                candles={candles}
+                interval={chartInterval}
+              />
+            )}
+          </section>
         </div>
 
         <aside className={styles.watchlistPanel}>

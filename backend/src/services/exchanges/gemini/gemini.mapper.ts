@@ -106,7 +106,7 @@ export function mapGeminiCandles(
     low: parseNumber(low, "low"),
     close: parseNumber(close, "close"),
     volume: parseNumber(volume, "volume"),
-    timestamp: new Date(timestamp * 1000),
+    timestamp: new Date(timestamp > 1_000_000_000_000 ? timestamp : timestamp * 1000),
   }));
 }
 

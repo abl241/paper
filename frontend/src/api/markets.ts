@@ -1,5 +1,5 @@
 import { apiClient } from "./client";
-import type { ApiResponse, MarketTrade, OrderBook, Ticker } from "../types/market";
+import type { ApiResponse, Candle, MarketTrade, OrderBook, Ticker } from "../types/market";
 
 export async function listSymbols(): Promise<string[]> {
   const { data } = await apiClient.get<ApiResponse<string[]>>("/markets/symbols");
@@ -23,6 +23,17 @@ export async function getOrderBook(symbol: string): Promise<OrderBook> {
 export async function getTrades(symbol: string): Promise<MarketTrade[]> {
   const { data } = await apiClient.get<ApiResponse<MarketTrade[]>>(
     `/markets/trades/${encodeURIComponent(symbol)}`,
+  );
+  return data.data;
+}
+
+export async function getCandles(
+  symbol: string,
+  interval: string,
+): Promise<Candle[]> {
+  const { data } = await apiClient.get<ApiResponse<Candle[]>>(
+    `/markets/candles/${encodeURIComponent(symbol)}`,
+    { params: { interval } },
   );
   return data.data;
 }

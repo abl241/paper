@@ -1,0 +1,9 @@
+.chartWrap {
+  width: 100%;
+  min-height: 320px;
+}
+
+.empty {
+  margin: 0;
+  color: #64748b;
+}
