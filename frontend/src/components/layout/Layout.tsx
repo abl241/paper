@@ -9,7 +9,9 @@ export default function Layout() {
       <Header />
       <Nav />
       <main className={styles.main}>
-        <Outlet />
+        <div className={styles.workspace}>
+          <Outlet />
+        </div>
       </main>
     </div>
   );

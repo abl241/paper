@@ -5,7 +5,7 @@ import { parseDecimal } from "../utils/decimal.js";
 
 interface PositionRow {
   id: string;
-  user_id: string;
+  portfolio_id: string;
   symbol: string;
   quantity: string;
   average_cost: string;
@@ -16,7 +16,7 @@ interface PositionRow {
 function mapPosition(row: PositionRow): Position {
   return {
     id: row.id,
-    userId: row.user_id,
+    portfolioId: row.portfolio_id,
     symbol: row.symbol,
     quantity: parseDecimal(row.quantity),
     averageCost: parseDecimal(row.average_cost),
@@ -27,15 +27,15 @@ function mapPosition(row: PositionRow): Position {
 
 export async function findPositionForUpdate(
   client: PoolClient,
-  userId: string,
+  portfolioId: string,
   symbol: string,
 ): Promise<Position | null> {
   const result = await client.query<PositionRow>(
-    `SELECT id, user_id, symbol, quantity, average_cost, created_at, updated_at
+    `SELECT id, portfolio_id, symbol, quantity, average_cost, created_at, updated_at
      FROM positions
-     WHERE user_id = $1 AND symbol = $2
+     WHERE portfolio_id = $1 AND symbol = $2
      FOR UPDATE`,
-    [userId, symbol],
+    [portfolioId, symbol],
   );
 
   return result.rows[0] ? mapPosition(result.rows[0]) : null;
@@ -44,22 +44,22 @@ export async function findPositionForUpdate(
 export async function upsertPosition(
   client: PoolClient,
   input: {
-    userId: string;
+    portfolioId: string;
     symbol: string;
     quantity: number;
     averageCost: number;
   },
 ): Promise<Position> {
   const result = await client.query<PositionRow>(
-    `INSERT INTO positions (user_id, symbol, quantity, average_cost)
+    `INSERT INTO positions (portfolio_id, symbol, quantity, average_cost)
      VALUES ($1, $2, $3, $4)
-     ON CONFLICT (user_id, symbol)
+     ON CONFLICT (portfolio_id, symbol)
      DO UPDATE SET
        quantity = EXCLUDED.quantity,
        average_cost = EXCLUDED.average_cost,
        updated_at = NOW()
-     RETURNING id, user_id, symbol, quantity, average_cost, created_at, updated_at`,
-    [input.userId, input.symbol, input.quantity, input.averageCost],
+     RETURNING id, portfolio_id, symbol, quantity, average_cost, created_at, updated_at`,
+    [input.portfolioId, input.symbol, input.quantity, input.averageCost],
   );
 
   return mapPosition(result.rows[0]);
@@ -67,24 +67,35 @@ export async function upsertPosition(
 
 export async function deletePosition(
   client: PoolClient,
-  userId: string,
+  portfolioId: string,
   symbol: string,
 ): Promise<void> {
   await client.query(
     `DELETE FROM positions
-     WHERE user_id = $1 AND symbol = $2`,
-    [userId, symbol],
+     WHERE portfolio_id = $1 AND symbol = $2`,
+    [portfolioId, symbol],
   );
 }
 
-export async function findPositionsByUserId(userId: string): Promise<Position[]> {
+export async function findPositionsByPortfolioId(
+  portfolioId: string,
+): Promise<Position[]> {
   const result = await pool.query<PositionRow>(
-    `SELECT id, user_id, symbol, quantity, average_cost, created_at, updated_at
+    `SELECT id, portfolio_id, symbol, quantity, average_cost, created_at, updated_at
      FROM positions
-     WHERE user_id = $1
+     WHERE portfolio_id = $1
      ORDER BY symbol ASC`,
-    [userId],
+    [portfolioId],
   );
 
   return result.rows.map(mapPosition);
+}
+
+export async function deleteAllPositions(
+  client: PoolClient,
+  portfolioId: string,
+): Promise<void> {
+  await client.query(`DELETE FROM positions WHERE portfolio_id = $1`, [
+    portfolioId,
+  ]);
 }

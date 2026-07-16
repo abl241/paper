@@ -9,5 +9,14 @@
   max-width: 72rem;
   width: 100%;
   margin: 0 auto;
-  padding: 2rem 1.5rem;
+  padding: var(--space-6) var(--space-5);
+}
+
+.workspace {
+  background: var(--sheet);
+  border: 1px solid var(--sheet-edge);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sheet);
+  padding: var(--space-5);
+  min-height: calc(100vh - 10rem);
 }

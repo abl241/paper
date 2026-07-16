@@ -1,0 +1,301 @@
+.page {
+  max-width: 72rem;
+}
+
+.topBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.backButton,
+.watchButton,
+.tradeLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.backButton {
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #334155;
+}
+
+.backButton:hover {
+  background: #f8fafc;
+}
+
+.topActions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.liveBadge {
+  padding: 0.375rem 0.625rem;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.liveOn {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.watchButton {
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #334155;
+}
+
+.watchButton:hover:not(:disabled) {
+  background: #fffbeb;
+  color: #b45309;
+}
+
+.tradeLink {
+  border: none;
+  background: #1d4ed8;
+  color: #ffffff;
+}
+
+.tradeLink:hover {
+  background: #1e40af;
+}
+
+.hero {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.title {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.subtitle {
+  margin: 0.25rem 0 0;
+  color: #64748b;
+}
+
+.heroPrice {
+  margin-left: auto;
+  text-align: right;
+}
+
+.heroLabel {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.heroPrice strong {
+  font-size: 1.75rem;
+  font-weight: 700;
+}
+
+.statRow {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.statCard {
+  padding: 0.875rem 1rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  background: #ffffff;
+}
+
+.statCard span {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.statCard strong {
+  font-size: 1.125rem;
+}
+
+.panel {
+  padding: 1rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  background: #ffffff;
+  margin-bottom: 1rem;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.panelHeader h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.intervalGroup {
+  display: flex;
+  gap: 0.375rem;
+}
+
+.intervalButton {
+  padding: 0.35rem 0.6rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.375rem;
+  background: #ffffff;
+  color: #64748b;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.intervalActive {
+  background: #eff6ff;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.bookGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.bookTitleBid,
+.bookTitleAsk {
+  margin: 0 0 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.bookTitleBid {
+  color: #15803d;
+}
+
+.bookTitleAsk {
+  color: #b91c1c;
+}
+
+.bookList,
+.tradeList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bookList li,
+.tradeList li {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.45rem 0;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 0.875rem;
+}
+
+.bookList li {
+  grid-template-columns: 1fr 1fr;
+}
+
+.tradeList li {
+  grid-template-columns: 3.5rem 1fr 1fr auto;
+  align-items: center;
+}
+
+.sideBuy {
+  color: #15803d;
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+}
+
+.sideSell {
+  color: #b91c1c;
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+}
+
+.tradeTime {
+  color: #94a3b8;
+  font-size: 0.75rem;
+}
+
+.message {
+  margin: 0;
+  color: #64748b;
+}
+
+.error {
+  padding: 1rem;
+  border: 1px solid #fecaca;
+  border-radius: 0.5rem;
+  background: #fef2f2;
+  color: #991b1b;
+  margin-bottom: 1rem;
+}
+
+@media (max-width: 900px) {
+  .statRow,
+  .grid,
+  .bookGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .hero {
+    flex-wrap: wrap;
+  }
+
+  .heroPrice {
+    margin-left: 0;
+    text-align: left;
+    width: 100%;
+  }
+
+  .topBar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

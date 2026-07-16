@@ -1,21 +1,27 @@
 .page {
-  max-width: 48rem;
+  max-width: 40rem;
+}
+
+.stamp {
+  margin-bottom: var(--space-4);
 }
 
 .title {
-  margin: 0 0 0.75rem;
-  font-size: 2rem;
+  margin: 0 0 var(--space-3);
+  font-size: 2.25rem;
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--ink);
 }
 
 .lead {
-  margin: 0 0 1rem;
-  font-size: 1.125rem;
-  color: #334155;
+  margin: 0;
+  font-size: 1.0625rem;
+  color: var(--ink-muted);
+  max-width: 36rem;
 }
 
 .note {
   margin: 0;
-  color: #64748b;
 }

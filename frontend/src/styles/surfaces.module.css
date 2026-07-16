@@ -1,0 +1,56 @@
+/**
+ * Shared surface primitives for the paper / drafting aesthetic.
+ * Import where needed: `import surfaces from "../../styles/surfaces.module.css"`
+ */
+
+.sheet {
+  background: var(--sheet);
+  border: 1px solid var(--sheet-edge);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sheet);
+}
+
+.ruled {
+  background-color: var(--paper-elevated);
+  background-image:
+    linear-gradient(var(--rule) 1px, transparent 1px),
+    linear-gradient(90deg, var(--rule) 1px, transparent 1px);
+  background-size: var(--grid-size) var(--grid-size);
+  background-position: -1px -1px;
+}
+
+.inkRule {
+  border: none;
+  border-top: 1px solid var(--rule-strong);
+  margin: var(--space-4) 0;
+}
+
+.stamp {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0.2rem 0.45rem;
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.titleBlock {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.annotation {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--ink-muted);
+  letter-spacing: 0.02em;
+}

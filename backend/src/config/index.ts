@@ -48,6 +48,7 @@ export const config = {
   exchange: process.env.EXCHANGE ?? "gemini",
   geminiBaseUrl: process.env.GEMINI_BASE_URL ?? "https://api.gemini.com",
   geminiWsUrl: process.env.GEMINI_WS_URL ?? "wss://ws.gemini.com",
+  coinbaseBaseUrl: process.env.COINBASE_BASE_URL ?? "https://api.coinbase.com",
   jwtSecret: requireJwtSecret(),
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? "7d",
   startingCashBalance: parseStartingCashBalance(process.env.STARTING_CASH_BALANCE),

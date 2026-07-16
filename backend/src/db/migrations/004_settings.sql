@@ -1,0 +1,7 @@
+CREATE TABLE settings (
+  user_id UUID PRIMARY KEY REFERENCES users (id) ON DELETE CASCADE,
+  price_refresh_ms INTEGER NOT NULL DEFAULT 1000
+    CHECK (price_refresh_ms IN (0, 1000, 5000, 15000, 30000)),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

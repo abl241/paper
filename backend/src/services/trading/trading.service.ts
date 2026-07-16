@@ -1,9 +1,9 @@
 import type { PoolClient } from "pg";
 import { pool } from "../../config/database.js";
 import {
-  findCashAccountForUpdate,
-  updateCashBalance,
-} from "../../models/cash-account.model.js";
+  findPortfolioForUpdate,
+  updatePortfolioCash,
+} from "../../models/portfolio.model.js";
 import {
   deletePosition,
   findPositionForUpdate,
@@ -11,32 +11,47 @@ import {
 } from "../../models/position.model.js";
 import { insertTrade } from "../../models/trade.model.js";
 import { AppError } from "../../types/api.js";
-import type { TradeExecutionResult, ExecuteOrderInput } from "../../types/trading.js";
-import { normalizeSymbol } from "../../utils/symbols.js";
+import type {
+  ExecuteOrderInput,
+  TradeExecutionResult,
+} from "../../types/trading.js";
 import { roundAmount, roundUsd } from "../../utils/decimal.js";
+import { normalizeSymbol } from "../../utils/symbols.js";
 import { marketService } from "../market/market.service.js";
 import { portfolioService } from "../portfolio/portfolio.service.js";
 
 export class TradingService {
-  async executeBuy(userId: string, input: ExecuteOrderInput): Promise<TradeExecutionResult> {
-    return this.executeOrder(userId, input, "buy");
+  async executeBuy(
+    userId: string,
+    portfolioId: string,
+    input: ExecuteOrderInput,
+  ): Promise<TradeExecutionResult> {
+    return this.executeOrder(userId, portfolioId, input, "buy");
   }
 
-  async executeSell(userId: string, input: ExecuteOrderInput): Promise<TradeExecutionResult> {
-    return this.executeOrder(userId, input, "sell");
+  async executeSell(
+    userId: string,
+    portfolioId: string,
+    input: ExecuteOrderInput,
+  ): Promise<TradeExecutionResult> {
+    return this.executeOrder(userId, portfolioId, input, "sell");
   }
 
   private async executeOrder(
     userId: string,
+    portfolioId: string,
     input: ExecuteOrderInput,
     side: "buy" | "sell",
   ): Promise<TradeExecutionResult> {
     const symbol = this.parseSymbol(input.symbol);
     const quantity = this.parseQuantity(input.quantity);
 
-    await portfolioService.initializeAccount(userId);
-
-    const ticker = await marketService.getTicker(symbol);
+    const portfolio = await portfolioService.requireOwnedPortfolio(
+      userId,
+      portfolioId,
+    );
+    const exchange = await portfolioService.resolveExchange(userId, portfolio);
+    const ticker = await marketService.getTicker(symbol, exchange);
     const executionPrice =
       side === "buy"
         ? roundAmount(ticker.ask || ticker.last)
@@ -47,29 +62,32 @@ export class TradingService {
     try {
       await client.query("BEGIN");
 
-      const cashAccount = await findCashAccountForUpdate(client, userId);
-      if (!cashAccount) {
-        throw new AppError("Cash account not found", 404, "ACCOUNT_NOT_FOUND");
+      const locked = await findPortfolioForUpdate(client, portfolioId);
+      if (!locked) {
+        throw new AppError("Portfolio not found", 404, "PORTFOLIO_NOT_FOUND");
+      }
+      if (locked.archivedAt) {
+        throw new AppError("Portfolio is archived", 400, "PORTFOLIO_ARCHIVED");
       }
 
       if (side === "buy") {
         const result = await this.processBuy(client, {
-          userId,
+          portfolioId,
           symbol,
           quantity,
           executionPrice,
-          cashBalance: cashAccount.balance,
+          cashBalance: locked.cashBalance,
         });
         await client.query("COMMIT");
         return result;
       }
 
       const result = await this.processSell(client, {
-        userId,
+        portfolioId,
         symbol,
         quantity,
         executionPrice,
-        cashBalance: cashAccount.balance,
+        cashBalance: locked.cashBalance,
       });
       await client.query("COMMIT");
       return result;
@@ -84,7 +102,7 @@ export class TradingService {
   private async processBuy(
     client: PoolClient,
     input: {
-      userId: string;
+      portfolioId: string;
       symbol: string;
       quantity: number;
       executionPrice: number;
@@ -99,7 +117,7 @@ export class TradingService {
 
     const existingPosition = await findPositionForUpdate(
       client,
-      input.userId,
+      input.portfolioId,
       input.symbol,
     );
 
@@ -108,26 +126,27 @@ export class TradingService {
     );
     const newAverageCost = existingPosition
       ? roundAmount(
-          (existingPosition.quantity * existingPosition.averageCost + totalCost) /
+          (existingPosition.quantity * existingPosition.averageCost +
+            totalCost) /
             newQuantity,
         )
       : roundAmount(input.executionPrice);
 
     await upsertPosition(client, {
-      userId: input.userId,
+      portfolioId: input.portfolioId,
       symbol: input.symbol,
       quantity: newQuantity,
       averageCost: newAverageCost,
     });
 
-    const updatedCash = await updateCashBalance(
+    const updated = await updatePortfolioCash(
       client,
-      input.userId,
+      input.portfolioId,
       roundUsd(input.cashBalance - totalCost),
     );
 
     const trade = await insertTrade(client, {
-      userId: input.userId,
+      portfolioId: input.portfolioId,
       symbol: input.symbol,
       side: "buy",
       quantity: input.quantity,
@@ -135,23 +154,31 @@ export class TradingService {
       realizedPnL: null,
     });
 
-    return { trade, cashBalance: updatedCash.balance };
+    return { trade, cashBalance: updated.cashBalance };
   }
 
   private async processSell(
     client: PoolClient,
     input: {
-      userId: string;
+      portfolioId: string;
       symbol: string;
       quantity: number;
       executionPrice: number;
       cashBalance: number;
     },
   ): Promise<TradeExecutionResult> {
-    const position = await findPositionForUpdate(client, input.userId, input.symbol);
+    const position = await findPositionForUpdate(
+      client,
+      input.portfolioId,
+      input.symbol,
+    );
 
     if (!position || position.quantity < input.quantity) {
-      throw new AppError("Insufficient position quantity", 400, "INSUFFICIENT_POSITION");
+      throw new AppError(
+        "Insufficient position quantity",
+        400,
+        "INSUFFICIENT_POSITION",
+      );
     }
 
     const proceeds = roundUsd(input.quantity * input.executionPrice);
@@ -162,24 +189,24 @@ export class TradingService {
     const remainingQuantity = roundAmount(position.quantity - input.quantity);
 
     if (remainingQuantity <= 0) {
-      await deletePosition(client, input.userId, input.symbol);
+      await deletePosition(client, input.portfolioId, input.symbol);
     } else {
       await upsertPosition(client, {
-        userId: input.userId,
+        portfolioId: input.portfolioId,
         symbol: input.symbol,
         quantity: remainingQuantity,
         averageCost: position.averageCost,
       });
     }
 
-    const updatedCash = await updateCashBalance(
+    const updated = await updatePortfolioCash(
       client,
-      input.userId,
+      input.portfolioId,
       roundUsd(input.cashBalance + proceeds),
     );
 
     const trade = await insertTrade(client, {
-      userId: input.userId,
+      portfolioId: input.portfolioId,
       symbol: input.symbol,
       side: "sell",
       quantity: input.quantity,
@@ -187,20 +214,28 @@ export class TradingService {
       realizedPnL,
     });
 
-    return { trade, cashBalance: updatedCash.balance };
+    return { trade, cashBalance: updated.cashBalance };
   }
 
   private parseSymbol(symbolInput: string): string {
     try {
       return normalizeSymbol(symbolInput);
     } catch {
-      throw new AppError(`Invalid symbol: ${symbolInput}`, 400, "INVALID_SYMBOL");
+      throw new AppError(
+        `Invalid symbol: ${symbolInput}`,
+        400,
+        "INVALID_SYMBOL",
+      );
     }
   }
 
   private parseQuantity(quantity: number): number {
     if (!Number.isFinite(quantity) || quantity <= 0) {
-      throw new AppError("Quantity must be greater than zero", 400, "INVALID_QUANTITY");
+      throw new AppError(
+        "Quantity must be greater than zero",
+        400,
+        "INVALID_QUANTITY",
+      );
     }
 
     return roundAmount(quantity);

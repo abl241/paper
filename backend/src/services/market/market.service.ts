@@ -1,33 +1,49 @@
 import type { Candle, MarketTrade, OrderBook, Ticker } from "../../types/market.js";
-import { getExchange } from "../exchanges/index.js";
+import {
+  getExchange,
+  parseExchangeName,
+  type ExchangeName,
+} from "../exchanges/index.js";
 import type { Exchange } from "../exchanges/types.js";
 
 export class MarketService {
-  constructor(private readonly exchange: Exchange) {}
-
-  getExchangeName(): string {
-    return this.exchange.name;
+  resolveExchange(name?: string | ExchangeName): Exchange {
+    return getExchange(parseExchangeName(name));
   }
 
-  listSymbols(): Promise<string[]> {
-    return this.exchange.listSymbols();
+  getExchangeName(name?: string | ExchangeName): string {
+    return this.resolveExchange(name).name;
   }
 
-  getTicker(symbol: string): Promise<Ticker> {
-    return this.exchange.getTicker(symbol);
+  listSymbols(exchange?: string | ExchangeName): Promise<string[]> {
+    return this.resolveExchange(exchange).listSymbols();
   }
 
-  getOrderBook(symbol: string): Promise<OrderBook> {
-    return this.exchange.getOrderBook(symbol);
+  getTicker(symbol: string, exchange?: string | ExchangeName): Promise<Ticker> {
+    return this.resolveExchange(exchange).getTicker(symbol);
   }
 
-  getTrades(symbol: string): Promise<MarketTrade[]> {
-    return this.exchange.getTrades(symbol);
+  getOrderBook(
+    symbol: string,
+    exchange?: string | ExchangeName,
+  ): Promise<OrderBook> {
+    return this.resolveExchange(exchange).getOrderBook(symbol);
   }
 
-  getCandles(symbol: string, interval: string): Promise<Candle[]> {
-    return this.exchange.getCandles(symbol, interval);
+  getTrades(
+    symbol: string,
+    exchange?: string | ExchangeName,
+  ): Promise<MarketTrade[]> {
+    return this.resolveExchange(exchange).getTrades(symbol);
+  }
+
+  getCandles(
+    symbol: string,
+    interval: string,
+    exchange?: string | ExchangeName,
+  ): Promise<Candle[]> {
+    return this.resolveExchange(exchange).getCandles(symbol, interval);
   }
 }
 
-export const marketService = new MarketService(getExchange());
+export const marketService = new MarketService();

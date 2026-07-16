@@ -1,0 +1,61 @@
+/**
+ * Design tokens — architect / grid-paper foundation.
+ * Prefer these variables over hard-coded colors so later aesthetic
+ * passes are mostly retokening, not rewriting every module.
+ *
+ * Direction: cool graphite ink on blueprint-ruled paper.
+ * Avoid warm cream + terracotta “notebook” clichés.
+ */
+
+:root {
+  /* Surfaces */
+  --paper: #eef1f5;
+  --paper-elevated: #f7f8fa;
+  --sheet: #fbfcfd;
+  --sheet-edge: #d5dde8;
+
+  /* Ink */
+  --ink: #1a2332;
+  --ink-muted: #5b6b7c;
+  --ink-faint: #8b9aab;
+
+  /* Blueprint accent */
+  --accent: #2f5f8a;
+  --accent-soft: #e4eef6;
+  --accent-strong: #244a6c;
+
+  /* Grid / drafting */
+  --rule: rgba(47, 95, 138, 0.14);
+  --rule-strong: rgba(47, 95, 138, 0.28);
+  --grid-size: 24px;
+
+  /* Feedback */
+  --success: #2f6b4f;
+  --success-soft: #e6f2eb;
+  --danger: #9b3b3b;
+  --danger-soft: #f8eaea;
+  --warning: #8a6a2f;
+  --warning-soft: #f5efdf;
+
+  /* Shape */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+
+  /* Type */
+  --font-display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  /* Spacing scale */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+
+  /* Shadows — keep flat / drafted, not glossy */
+  --shadow-sheet: 0 1px 0 rgba(26, 35, 50, 0.06), 0 8px 24px rgba(26, 35, 50, 0.06);
+}

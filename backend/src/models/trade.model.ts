@@ -1,11 +1,11 @@
 import type { PoolClient } from "pg";
 import { pool } from "../config/database.js";
-import type { Trade } from "../types/portfolio.js";
+import type { Trade, TradeFilters } from "../types/portfolio.js";
 import { parseDecimal } from "../utils/decimal.js";
 
 interface TradeRow {
   id: string;
-  user_id: string;
+  portfolio_id: string;
   symbol: string;
   side: "buy" | "sell";
   quantity: string;
@@ -17,12 +17,13 @@ interface TradeRow {
 function mapTrade(row: TradeRow): Trade {
   return {
     id: row.id,
-    userId: row.user_id,
+    portfolioId: row.portfolio_id,
     symbol: row.symbol,
     side: row.side,
     quantity: parseDecimal(row.quantity),
     executionPrice: parseDecimal(row.execution_price),
-    realizedPnL: row.realized_pnl === null ? null : parseDecimal(row.realized_pnl),
+    realizedPnL:
+      row.realized_pnl === null ? null : parseDecimal(row.realized_pnl),
     executedAt: row.executed_at,
   };
 }
@@ -30,7 +31,7 @@ function mapTrade(row: TradeRow): Trade {
 export async function insertTrade(
   client: PoolClient,
   input: {
-    userId: string;
+    portfolioId: string;
     symbol: string;
     side: "buy" | "sell";
     quantity: number;
@@ -39,11 +40,11 @@ export async function insertTrade(
   },
 ): Promise<Trade> {
   const result = await client.query<TradeRow>(
-    `INSERT INTO trades (user_id, symbol, side, quantity, execution_price, realized_pnl)
+    `INSERT INTO trades (portfolio_id, symbol, side, quantity, execution_price, realized_pnl)
      VALUES ($1, $2, $3, $4, $5, $6)
-     RETURNING id, user_id, symbol, side, quantity, execution_price, realized_pnl, executed_at`,
+     RETURNING id, portfolio_id, symbol, side, quantity, execution_price, realized_pnl, executed_at`,
     [
-      input.userId,
+      input.portfolioId,
       input.symbol,
       input.side,
       input.quantity,
@@ -55,14 +56,59 @@ export async function insertTrade(
   return mapTrade(result.rows[0]);
 }
 
-export async function findTradesByUserId(userId: string): Promise<Trade[]> {
+export async function findTradesByPortfolioId(
+  portfolioId: string,
+  filters: TradeFilters = {},
+): Promise<Trade[]> {
+  const clauses = ["portfolio_id = $1"];
+  const params: unknown[] = [portfolioId];
+
+  if (filters.symbol) {
+    params.push(filters.symbol);
+    clauses.push(`symbol = $${params.length}`);
+  }
+  if (filters.side) {
+    params.push(filters.side);
+    clauses.push(`side = $${params.length}`);
+  }
+  if (filters.from) {
+    params.push(filters.from);
+    clauses.push(`executed_at >= $${params.length}`);
+  }
+  if (filters.to) {
+    params.push(filters.to);
+    clauses.push(`executed_at <= $${params.length}`);
+  }
+
   const result = await pool.query<TradeRow>(
-    `SELECT id, user_id, symbol, side, quantity, execution_price, realized_pnl, executed_at
+    `SELECT id, portfolio_id, symbol, side, quantity, execution_price, realized_pnl, executed_at
      FROM trades
-     WHERE user_id = $1
+     WHERE ${clauses.join(" AND ")}
      ORDER BY executed_at DESC`,
-    [userId],
+    params,
   );
 
   return result.rows.map(mapTrade);
+}
+
+export async function findTradesChronological(
+  portfolioId: string,
+): Promise<Trade[]> {
+  const result = await pool.query<TradeRow>(
+    `SELECT id, portfolio_id, symbol, side, quantity, execution_price, realized_pnl, executed_at
+     FROM trades
+     WHERE portfolio_id = $1
+     ORDER BY executed_at ASC`,
+    [portfolioId],
+  );
+  return result.rows.map(mapTrade);
+}
+
+export async function deleteAllTrades(
+  client: PoolClient,
+  portfolioId: string,
+): Promise<void> {
+  await client.query(`DELETE FROM trades WHERE portfolio_id = $1`, [
+    portfolioId,
+  ]);
 }

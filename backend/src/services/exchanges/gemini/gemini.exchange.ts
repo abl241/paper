@@ -18,6 +18,13 @@ import type {
   GeminiTradeResponse,
 } from "./gemini.types.js";
 
+/** Cap Gemini's large candle payloads to a usable recent window. */
+const CANDLE_LOOKBACK_MS: Record<string, number> = {
+  "1hr": 1000 * 60 * 60 * 48,
+  "6hr": 1000 * 60 * 60 * 24 * 14,
+  "1day": 1000 * 60 * 60 * 24 * 90,
+};
+
 export class GeminiExchange implements Exchange {
   readonly name = "gemini";
 
@@ -59,7 +66,14 @@ export class GeminiExchange implements Exchange {
     const data = await this.client.get<GeminiCandleResponse[]>(
       `/v2/candles/${geminiSymbol}/${timeframe}`,
     );
-    return mapGeminiCandles(symbol, data);
+    const candles = mapGeminiCandles(symbol, data);
+    const lookbackMs = CANDLE_LOOKBACK_MS[timeframe];
+    if (!lookbackMs || candles.length === 0) {
+      return candles;
+    }
+
+    const cutoff = Date.now() - lookbackMs;
+    return candles.filter((candle) => candle.timestamp.getTime() >= cutoff);
   }
 
   private toExchangeSymbol(symbol: string): string {

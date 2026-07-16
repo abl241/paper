@@ -1,0 +1,134 @@
+.icon {
+  display: block;
+  border-radius: 999px;
+  object-fit: cover;
+  background: #f8fafc;
+  flex-shrink: 0;
+}
+
+.fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+
+.sm {
+  width: 1.75rem;
+  height: 1.75rem;
+  font-size: 0.55rem;
+}
+
+.md {
+  width: 2.5rem;
+  height: 2.5rem;
+  font-size: 0.65rem;
+}
+
+.lg {
+  width: 3.5rem;
+  height: 3.5rem;
+  font-size: 0.8rem;
+}
+
+.pair {
+  position: relative;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.pair_sm {
+  width: 1.9rem;
+  height: 1.9rem;
+}
+
+.pair_md {
+  width: 2.65rem;
+  height: 2.65rem;
+}
+
+.pair_lg {
+  width: 3.75rem;
+  height: 3.75rem;
+}
+
+.pairIcon,
+.pairFallback {
+  position: absolute;
+  border-radius: 999px;
+  border: 2px solid #ffffff;
+  background: #f8fafc;
+  box-sizing: border-box;
+}
+
+.pairIcon {
+  object-fit: cover;
+}
+
+.pairFallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #1d4ed8;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.pair_sm .base {
+  width: 1.25rem;
+  height: 1.25rem;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  font-size: 0.4rem;
+}
+
+.pair_sm .quote {
+  width: 1.15rem;
+  height: 1.15rem;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  font-size: 0.35rem;
+}
+
+.pair_md .base {
+  width: 1.75rem;
+  height: 1.75rem;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  font-size: 0.5rem;
+}
+
+.pair_md .quote {
+  width: 1.55rem;
+  height: 1.55rem;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  font-size: 0.45rem;
+}
+
+.pair_lg .base {
+  width: 2.45rem;
+  height: 2.45rem;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  font-size: 0.65rem;
+}
+
+.pair_lg .quote {
+  width: 2.15rem;
+  height: 2.15rem;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  font-size: 0.55rem;
+}

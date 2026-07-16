@@ -1,17 +1,22 @@
 import type { Request, Response, NextFunction } from "express";
+import { parseExchangeName } from "../services/exchanges/index.js";
 import { marketService } from "../services/market/market.service.js";
 import { AppError } from "../types/api.js";
 import { getRouteParam } from "../utils/params.js";
 
 const ALLOWED_INTERVALS = new Set(["1h", "6h", "1d"]);
 
+function exchangeFromRequest(req: Request): string {
+  return parseExchangeName(req.query.exchange);
+}
+
 export async function listSymbols(
-  _req: Request,
+  req: Request,
   res: Response,
   next: NextFunction,
 ): Promise<void> {
   try {
-    const symbols = await marketService.listSymbols();
+    const symbols = await marketService.listSymbols(exchangeFromRequest(req));
     res.status(200).json({ data: symbols });
   } catch (error) {
     next(error);
@@ -24,7 +29,10 @@ export async function getTicker(
   next: NextFunction,
 ): Promise<void> {
   try {
-    const ticker = await marketService.getTicker(getRouteParam(req, "symbol"));
+    const ticker = await marketService.getTicker(
+      getRouteParam(req, "symbol"),
+      exchangeFromRequest(req),
+    );
     res.status(200).json({ data: ticker });
   } catch (error) {
     next(error);
@@ -37,7 +45,10 @@ export async function getOrderBook(
   next: NextFunction,
 ): Promise<void> {
   try {
-    const orderBook = await marketService.getOrderBook(getRouteParam(req, "symbol"));
+    const orderBook = await marketService.getOrderBook(
+      getRouteParam(req, "symbol"),
+      exchangeFromRequest(req),
+    );
     res.status(200).json({ data: orderBook });
   } catch (error) {
     next(error);
@@ -50,7 +61,10 @@ export async function getTrades(
   next: NextFunction,
 ): Promise<void> {
   try {
-    const trades = await marketService.getTrades(getRouteParam(req, "symbol"));
+    const trades = await marketService.getTrades(
+      getRouteParam(req, "symbol"),
+      exchangeFromRequest(req),
+    );
     res.status(200).json({ data: trades });
   } catch (error) {
     next(error);
@@ -77,6 +91,7 @@ export async function getCandles(
     const candles = await marketService.getCandles(
       getRouteParam(req, "symbol"),
       interval,
+      exchangeFromRequest(req),
     );
 
     const sorted = [...candles].sort(

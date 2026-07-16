@@ -1,9 +1,9 @@
 import { Router } from "express";
+import portfoliosRoutes from "./portfolios.routes.js";
 import healthRoutes from "./health.routes.js";
 import authRoutes from "./auth.routes.js";
 import marketRoutes from "./market.routes.js";
-import portfolioRoutes from "./portfolio.routes.js";
-import tradingRoutes from "./trading.routes.js";
+import settingsRoutes from "./settings.routes.js";
 import watchlistRoutes from "./watchlist.routes.js";
 
 const router = Router();
@@ -11,8 +11,8 @@ const router = Router();
 router.use(healthRoutes);
 router.use("/auth", authRoutes);
 router.use("/markets", marketRoutes);
-router.use("/portfolio", portfolioRoutes);
-router.use("/trading", tradingRoutes);
+router.use("/portfolios", portfoliosRoutes);
 router.use("/watchlist", watchlistRoutes);
+router.use("/settings", settingsRoutes);
 
 export default router;

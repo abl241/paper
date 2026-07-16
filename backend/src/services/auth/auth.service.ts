@@ -9,6 +9,7 @@ import {
 } from "../../models/user.model.js";
 import { AppError } from "../../types/api.js";
 import { portfolioService } from "../portfolio/portfolio.service.js";
+import { settingsService } from "../settings/settings.service.js";
 import type {
   AuthResponse,
   AuthTokenPayload,
@@ -78,6 +79,7 @@ export class AuthService {
     const passwordHash = await bcrypt.hash(input.password, 12);
     const user = await createUser({ username, email, passwordHash });
     await portfolioService.initializeAccount(user.id);
+    await settingsService.initialize(user.id);
 
     return {
       token: createToken(user),

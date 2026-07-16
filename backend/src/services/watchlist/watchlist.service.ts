@@ -11,16 +11,21 @@ import { AppError } from "../../types/api.js";
 import type { WatchlistView } from "../../types/watchlist.js";
 import { normalizeSymbol } from "../../utils/symbols.js";
 import { marketService } from "../market/market.service.js";
+import { settingsService } from "../settings/settings.service.js";
 
 export class WatchlistService {
   async getWatchlist(userId: string): Promise<WatchlistView> {
     const watchlist = await this.ensureDefaultWatchlist(userId);
     const items = await findWatchlistItems(watchlist.id);
+    const settings = await settingsService.getSettings(userId);
 
     const quotedItems = await Promise.all(
       items.map(async (item) => {
         try {
-          const ticker = await marketService.getTicker(item.symbol);
+          const ticker = await marketService.getTicker(
+            item.symbol,
+            settings.exchange,
+          );
           return {
             id: item.id,
             symbol: item.symbol,

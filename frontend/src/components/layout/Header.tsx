@@ -9,7 +9,7 @@ export default function Header() {
     <header className={styles.header}>
       <div className={styles.inner}>
         <div className={styles.brand}>
-          <span className={styles.logo}>Paper Trade</span>
+          <span className={styles.logo}>Paper</span>
           <span className={styles.tagline}>Simulated crypto trading</span>
         </div>
 
