@@ -5,6 +5,8 @@ const { Pool } = pg;
 
 export const pool = new Pool({
   connectionString: config.databaseUrl,
+  // Neon pooled connections: keep this small so API (+ future workers) stay under free-tier limits.
+  max: 10,
 });
 
 pool.on("error", (err) => {

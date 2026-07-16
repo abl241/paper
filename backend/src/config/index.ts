@@ -40,11 +40,26 @@ function parseStartingCashBalance(value: string | undefined): number {
   return parsed;
 }
 
+function parseCorsOrigins(value: string | undefined): string | string[] {
+  const raw = (value ?? "http://localhost:5173").trim();
+  if (raw === "*") {
+    return "*";
+  }
+  const origins = raw
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  if (origins.length === 0) {
+    return "http://localhost:5173";
+  }
+  return origins.length === 1 ? origins[0]! : origins;
+}
+
 export const config = {
   port: parsePort(process.env.PORT, 3001),
   nodeEnv: process.env.NODE_ENV ?? "development",
   databaseUrl: requireDatabaseUrl(),
-  corsOrigin: process.env.CORS_ORIGIN ?? "http://localhost:5173",
+  corsOrigin: parseCorsOrigins(process.env.CORS_ORIGIN),
   exchange: process.env.EXCHANGE ?? "gemini",
   geminiBaseUrl: process.env.GEMINI_BASE_URL ?? "https://api.gemini.com",
   geminiWsUrl: process.env.GEMINI_WS_URL ?? "wss://ws.gemini.com",
