@@ -15,6 +15,7 @@ import PerformanceSection from "./pages/portfolio/PerformanceSection";
 import PortfolioLayout from "./pages/portfolio/PortfolioLayout";
 import SettingsSection from "./pages/portfolio/SettingsSection";
 import TradeSection from "./pages/portfolio/TradeSection";
+import StrategyLabPage from "./pages/strategy-lab/StrategyLabPage";
 
 export default function App() {
   return (
@@ -52,6 +53,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <TradeRedirect />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="strategy-lab"
+          element={
+            <ProtectedRoute>
+              <StrategyLabPage />
             </ProtectedRoute>
           }
         />

@@ -12,6 +12,11 @@
   padding: var(--space-6) var(--space-5);
 }
 
+.mainWide {
+  max-width: none;
+  padding: var(--space-4) var(--space-4);
+}
+
 .workspace {
   background: var(--sheet);
   border: 1px solid var(--sheet-edge);
@@ -19,4 +24,9 @@
   box-shadow: var(--shadow-sheet);
   padding: var(--space-5);
   min-height: calc(100vh - 10rem);
+}
+
+.workspaceLab {
+  padding: 0;
+  overflow: hidden;
 }
