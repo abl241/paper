@@ -16,6 +16,7 @@ import PortfolioLayout from "./pages/portfolio/PortfolioLayout";
 import SettingsSection from "./pages/portfolio/SettingsSection";
 import TradeSection from "./pages/portfolio/TradeSection";
 import StrategyLabPage from "./pages/strategy-lab/StrategyLabPage";
+import ResearchPage from "./pages/research/ResearchPage";
 
 export default function App() {
   return (
@@ -61,6 +62,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <StrategyLabPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="research"
+          element={
+            <ProtectedRoute>
+              <ResearchPage />
             </ProtectedRoute>
           }
         />

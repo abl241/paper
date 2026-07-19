@@ -96,6 +96,7 @@ export class GeminiExchange implements Exchange {
       "30m": "30m",
       "1h": "1hr",
       "1hr": "1hr",
+      "4h": "6hr",
       "6h": "6hr",
       "6hr": "6hr",
       "1d": "1day",

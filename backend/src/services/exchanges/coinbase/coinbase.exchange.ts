@@ -20,6 +20,8 @@ import type {
 } from "./coinbase.types.js";
 
 const CANDLE_LOOKBACK_SECONDS: Record<string, number> = {
+  ONE_MINUTE: 60 * 60 * 24,
+  FIVE_MINUTE: 60 * 60 * 24 * 5,
   FIFTEEN_MINUTE: 60 * 60 * 24 * 21,
   ONE_HOUR: 60 * 60 * 24 * 90,
   SIX_HOUR: 60 * 60 * 24 * 180,
@@ -123,9 +125,12 @@ export class CoinbaseExchange implements Exchange {
 
   private toCoinbaseGranularity(interval: string): string {
     const mapping: Record<string, string> = {
+      "1m": "ONE_MINUTE",
+      "5m": "FIVE_MINUTE",
       "15m": "FIFTEEN_MINUTE",
       "1h": "ONE_HOUR",
       "1hr": "ONE_HOUR",
+      "4h": "SIX_HOUR",
       "6h": "SIX_HOUR",
       "6hr": "SIX_HOUR",
       "1d": "ONE_DAY",

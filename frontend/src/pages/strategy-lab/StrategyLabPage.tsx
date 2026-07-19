@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   createStrategy,
   deleteStrategy,
@@ -379,6 +380,18 @@ export default function StrategyLabPage() {
           >
             Validate
           </button>
+          {draft ? (
+            <Link
+              className={`${styles.button} ${styles.buttonLink}`}
+              to={`/research?strategyId=${encodeURIComponent(draft.id)}`}
+            >
+              Open in Research
+            </Link>
+          ) : (
+            <button type="button" className={styles.button} disabled>
+              Open in Research
+            </button>
+          )}
           <button
             type="button"
             className={`${styles.button} ${styles.buttonDanger}`}
