@@ -172,6 +172,19 @@
   font-weight: 700;
 }
 
+.sectionHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin-bottom: 0.85rem;
+}
+
+.sectionHeader .sectionTitle {
+  margin-bottom: 0;
+}
+
 .tableWrap {
   overflow-x: auto;
   border: 1px solid #e2e8f0;
@@ -301,64 +314,273 @@
 
 .tradeLayout {
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
-  gap: 1.5rem;
+  grid-template-columns: minmax(0, 22rem) minmax(0, 1fr);
+  gap: 1.75rem;
   align-items: start;
+}
+
+.tradePanel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.tradeAside {
+  padding-top: 0.25rem;
+}
+
+.sideToggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border-radius: 0.5rem;
+  background: #f1f5f9;
+}
+
+.sideTab {
+  border: none;
+  border-radius: 0.375rem;
+  padding: 0.65rem 0.75rem;
+  background: transparent;
+  color: #64748b;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.sideTabBuyActive {
+  background: #15803d;
+  color: #ffffff;
+}
+
+.sideTabSellActive {
+  background: #b91c1c;
+  color: #ffffff;
+}
+
+.symbolPicker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  background: #ffffff;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.symbolPicker:hover {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+}
+
+.symbolPickerMain {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.symbolPickerAsset {
+  display: block;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.symbolPickerPair {
+  display: block;
+  font-size: 0.8125rem;
+  color: #64748b;
+}
+
+.symbolPickerAction {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+  color: #475569;
+  font-size: 0.8125rem;
+  font-weight: 600;
 }
 
 .accountGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem;
-  margin-bottom: 1rem;
 }
 
-.quoteCard {
-  padding: 1rem 1.25rem;
+.tradeForm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.modeToggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.25rem;
+  padding: 0.2rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  background: #ffffff;
+}
+
+.modeTab {
+  border: none;
+  border-radius: 0.375rem;
+  padding: 0.45rem 0.6rem;
+  background: transparent;
+  color: #64748b;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.modeTabActive {
+  background: #0f172a;
+  color: #ffffff;
+}
+
+.amountField {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.amountInputWrap {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.15rem 0.85rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.5rem;
+  background: #ffffff;
+}
+
+.amountInputWrap:focus-within {
+  outline: 2px solid #bfdbfe;
+  border-color: #60a5fa;
+}
+
+.amountPrefix {
+  flex-shrink: 0;
+  color: #64748b;
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+
+.amountInput {
+  flex: 1;
+  min-width: 0;
+  padding: 0.75rem 0;
+  border: none;
+  background: transparent;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.amountInput:focus {
+  outline: none;
+}
+
+.amountInput::-webkit-outer-spin-button,
+.amountInput::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.amountInput[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.presetRow {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+.presetButton {
+  border: 1px solid #e2e8f0;
+  border-radius: 0.375rem;
+  padding: 0.45rem 0.35rem;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.presetButton:hover:not(:disabled) {
+  background: #e2e8f0;
+}
+
+.presetButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.conversionCard {
+  padding: 0.9rem 1rem;
   border: 1px solid #e2e8f0;
   border-radius: 0.5rem;
   background: #f8fafc;
-  margin-bottom: 1rem;
 }
 
-.quoteCard p {
-  margin: 0 0 0.4rem;
-  color: #334155;
-}
-
-.quoteCard p:last-child {
-  margin-bottom: 0;
-}
-
-.tradeActions {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+.conversionRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
   gap: 0.75rem;
+  margin-bottom: 0.45rem;
+  color: #64748b;
+  font-size: 0.875rem;
+}
+
+.conversionRow strong {
+  color: #0f172a;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  text-align: right;
+}
+
+.conversionHint {
+  margin: 0.35rem 0 0;
+  color: #94a3b8;
+  font-size: 0.75rem;
+}
+
+.buyButton,
+.sellButton {
+  width: 100%;
+  border: none;
+  border-radius: 0.5rem;
+  padding: 0.85rem 1rem;
+  color: #ffffff;
+  font-size: 0.975rem;
+  font-weight: 700;
+  cursor: pointer;
 }
 
 .buyButton {
-  border: none;
-  border-radius: 0.375rem;
-  padding: 0.75rem 1rem;
   background: #15803d;
-  color: #ffffff;
-  font-weight: 600;
-  cursor: pointer;
 }
 
 .sellButton {
-  border: none;
-  border-radius: 0.375rem;
-  padding: 0.75rem 1rem;
   background: #b91c1c;
-  color: #ffffff;
-  font-weight: 600;
-  cursor: pointer;
 }
 
 .buyButton:disabled,
 .sellButton:disabled {
-  opacity: 0.7;
+  opacity: 0.55;
   cursor: not-allowed;
 }
 
@@ -372,14 +594,6 @@
   color: #334155;
   font-size: 0.8125rem;
   font-weight: 600;
-}
-
-.curve {
-  width: 100%;
-  height: 220px;
-  border: 1px solid #e2e8f0;
-  border-radius: 0.5rem;
-  background: #ffffff;
 }
 
 .hint {
@@ -440,8 +654,7 @@
 
 @media (max-width: 640px) {
   .summaryGrid,
-  .accountGrid,
-  .tradeActions {
+  .accountGrid {
     grid-template-columns: 1fr;
   }
 }

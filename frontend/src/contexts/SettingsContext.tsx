@@ -13,11 +13,19 @@ import {
 } from "../api/settings";
 import { useAuth } from "./AuthContext";
 import type {
+  ClockFormat,
+  EquityDefaultRange,
+  EquityResolution,
+  EquityYAxis,
   PreferredExchange,
   PriceRefreshMs,
   UserSettings,
 } from "../types/settings";
 import {
+  DEFAULT_CLOCK_FORMAT,
+  DEFAULT_EQUITY_DEFAULT_RANGE,
+  DEFAULT_EQUITY_RESOLUTION,
+  DEFAULT_EQUITY_Y_AXIS,
   DEFAULT_EXCHANGE,
   DEFAULT_PRICE_REFRESH_MS,
 } from "../types/settings";
@@ -28,9 +36,17 @@ interface SettingsContextValue {
   settings: UserSettings;
   priceRefreshMs: PriceRefreshMs;
   exchange: PreferredExchange;
+  equityResolution: EquityResolution;
+  equityYAxis: EquityYAxis;
+  equityDefaultRange: EquityDefaultRange;
+  clockFormat: ClockFormat;
   isLoading: boolean;
   setPriceRefreshMs: (value: PriceRefreshMs) => Promise<void>;
   setExchange: (value: PreferredExchange) => Promise<void>;
+  setEquityResolution: (value: EquityResolution) => Promise<void>;
+  setEquityYAxis: (value: EquityYAxis) => Promise<void>;
+  setEquityDefaultRange: (value: EquityDefaultRange) => Promise<void>;
+  setClockFormat: (value: ClockFormat) => Promise<void>;
 }
 
 const SettingsContext = createContext<SettingsContextValue | undefined>(
@@ -41,6 +57,10 @@ function applySettings(next: UserSettings): UserSettings {
   const normalized: UserSettings = {
     priceRefreshMs: next.priceRefreshMs ?? DEFAULT_PRICE_REFRESH_MS,
     exchange: next.exchange ?? DEFAULT_EXCHANGE,
+    equityResolution: next.equityResolution ?? DEFAULT_EQUITY_RESOLUTION,
+    equityYAxis: next.equityYAxis ?? DEFAULT_EQUITY_Y_AXIS,
+    equityDefaultRange: next.equityDefaultRange ?? DEFAULT_EQUITY_DEFAULT_RANGE,
+    clockFormat: next.clockFormat ?? DEFAULT_CLOCK_FORMAT,
   };
   setPreferredExchange(normalized.exchange);
   return normalized;
@@ -120,16 +140,62 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     [saveSettings],
   );
 
+  const setEquityResolution = useCallback(
+    async (value: EquityResolution) => {
+      await saveSettings({ equityResolution: value });
+    },
+    [saveSettings],
+  );
+
+  const setEquityYAxis = useCallback(
+    async (value: EquityYAxis) => {
+      await saveSettings({ equityYAxis: value });
+    },
+    [saveSettings],
+  );
+
+  const setEquityDefaultRange = useCallback(
+    async (value: EquityDefaultRange) => {
+      await saveSettings({ equityDefaultRange: value });
+    },
+    [saveSettings],
+  );
+
+  const setClockFormat = useCallback(
+    async (value: ClockFormat) => {
+      await saveSettings({ clockFormat: value });
+    },
+    [saveSettings],
+  );
+
   const value = useMemo(
     () => ({
       settings,
       priceRefreshMs: settings.priceRefreshMs ?? DEFAULT_PRICE_REFRESH_MS,
       exchange: settings.exchange ?? DEFAULT_EXCHANGE,
+      equityResolution: settings.equityResolution ?? DEFAULT_EQUITY_RESOLUTION,
+      equityYAxis: settings.equityYAxis ?? DEFAULT_EQUITY_Y_AXIS,
+      equityDefaultRange:
+        settings.equityDefaultRange ?? DEFAULT_EQUITY_DEFAULT_RANGE,
+      clockFormat: settings.clockFormat ?? DEFAULT_CLOCK_FORMAT,
       isLoading,
       setPriceRefreshMs,
       setExchange,
+      setEquityResolution,
+      setEquityYAxis,
+      setEquityDefaultRange,
+      setClockFormat,
     }),
-    [settings, isLoading, setPriceRefreshMs, setExchange],
+    [
+      settings,
+      isLoading,
+      setPriceRefreshMs,
+      setExchange,
+      setEquityResolution,
+      setEquityYAxis,
+      setEquityDefaultRange,
+      setClockFormat,
+    ],
   );
 
   return (

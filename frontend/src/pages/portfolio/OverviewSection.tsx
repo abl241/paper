@@ -1,15 +1,22 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { getPortfolioDetail } from "../../api/portfolios";
+import {
+  getPortfolioDetail,
+  getPortfolioPerformance,
+} from "../../api/portfolios";
+import EquityCurveChart from "../../components/charts/EquityCurveChart";
 import { useActivePortfolio } from "../../contexts/ActivePortfolioContext";
-import type { PortfolioDetail } from "../../types/portfolio";
+import { useSettings } from "../../contexts/SettingsContext";
+import type { PerformanceStats, PortfolioDetail } from "../../types/portfolio";
 import { formatMoney, formatPct, formatPnL } from "./format";
 import styles from "./PortfolioHub.module.css";
 
 export default function OverviewSection() {
   const { portfolioId } = useParams();
   const { setActivePortfolioId, refreshPortfolios } = useActivePortfolio();
+  const { equityResolution } = useSettings();
   const [detail, setDetail] = useState<PortfolioDetail | null>(null);
+  const [performance, setPerformance] = useState<PerformanceStats | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -22,10 +29,14 @@ export default function OverviewSection() {
     let cancelled = false;
     setLoading(true);
 
-    getPortfolioDetail(portfolioId)
-      .then((data) => {
+    Promise.all([
+      getPortfolioDetail(portfolioId),
+      getPortfolioPerformance(portfolioId),
+    ])
+      .then(([nextDetail, nextPerformance]) => {
         if (!cancelled) {
-          setDetail(data);
+          setDetail(nextDetail);
+          setPerformance(nextPerformance);
           setError(null);
         }
       })
@@ -43,7 +54,7 @@ export default function OverviewSection() {
     return () => {
       cancelled = true;
     };
-  }, [portfolioId, setActivePortfolioId]);
+  }, [portfolioId, setActivePortfolioId, equityResolution]);
 
   useEffect(() => {
     void refreshPortfolios();
@@ -96,6 +107,26 @@ export default function OverviewSection() {
             {formatPct(summary.totalReturnPct)}
           </p>
         </article>
+      </div>
+
+      <div className={styles.section}>
+        <div className={styles.sectionHeader}>
+          <h2 className={styles.sectionTitle}>Equity curve</h2>
+          <Link
+            className={styles.inlineLink}
+            to={`/portfolio/${portfolioId}/performance`}
+          >
+            Full performance
+          </Link>
+        </div>
+        {performance ? (
+          <EquityCurveChart
+            points={performance.equityCurve}
+            startingCash={performance.startingCash}
+          />
+        ) : (
+          <p className={styles.message}>Equity history unavailable.</p>
+        )}
       </div>
 
       <div className={styles.section}>

@@ -25,17 +25,20 @@ import { useSettings } from "../contexts/SettingsContext";
 import { useMarketStream } from "../hooks/useMarketStream";
 import { useTradeNavigation } from "../hooks/useTradeNavigation";
 import type { Candle, MarketTrade, OrderBook, Ticker } from "../types/market";
+import {
+  candleIntervalForRange,
+  CHART_RANGE_OPTIONS,
+  type ChartRange,
+} from "../types/settings";
+import { formatTime } from "../utils/datetime";
 import { formatPrice, formatQty, formatVolume } from "../utils/format";
 import styles from "./MarketFocusPage.module.css";
-
-const CHART_INTERVALS = ["1h", "6h", "1d"] as const;
-type ChartInterval = (typeof CHART_INTERVALS)[number];
 
 export default function MarketFocusPage() {
   const { symbol: rawSymbol } = useParams();
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
-  const { exchange } = useSettings();
+  const { exchange, clockFormat } = useSettings();
   const goTrade = useTradeNavigation();
 
   const symbol = useMemo(() => {
@@ -49,7 +52,8 @@ export default function MarketFocusPage() {
   const [orderBook, setOrderBook] = useState<OrderBook | null>(null);
   const [trades, setTrades] = useState<MarketTrade[]>([]);
   const [candles, setCandles] = useState<Candle[]>([]);
-  const [chartInterval, setChartInterval] = useState<ChartInterval>("1h");
+  const [chartRange, setChartRange] = useState<ChartRange>("1W");
+  const [chartMode, setChartMode] = useState<"candle" | "line">("candle");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [candlesLoading, setCandlesLoading] = useState(false);
@@ -99,7 +103,7 @@ export default function MarketFocusPage() {
     let cancelled = false;
     setCandlesLoading(true);
 
-    getCandles(symbol, chartInterval)
+    getCandles(symbol, candleIntervalForRange(chartRange))
       .then((data) => {
         if (!cancelled) {
           setCandles(data);
@@ -119,7 +123,7 @@ export default function MarketFocusPage() {
     return () => {
       cancelled = true;
     };
-  }, [symbol, chartInterval, exchange]);
+  }, [symbol, chartRange, exchange]);
 
   useEffect(() => {
     if (!isAuthenticated || !symbol) {
@@ -281,27 +285,58 @@ export default function MarketFocusPage() {
           <h2>
             <ChartIcon /> Chart
           </h2>
-          <div className={styles.intervalGroup}>
-            {CHART_INTERVALS.map((interval) => (
+          <div className={styles.chartControls}>
+            <div className={styles.modeGroup} role="group" aria-label="Chart type">
               <button
-                key={interval}
                 type="button"
                 className={
-                  chartInterval === interval
+                  chartMode === "candle"
                     ? `${styles.intervalButton} ${styles.intervalActive}`
                     : styles.intervalButton
                 }
-                onClick={() => setChartInterval(interval)}
+                onClick={() => setChartMode("candle")}
               >
-                {interval}
+                Candles
               </button>
-            ))}
+              <button
+                type="button"
+                className={
+                  chartMode === "line"
+                    ? `${styles.intervalButton} ${styles.intervalActive}`
+                    : styles.intervalButton
+                }
+                onClick={() => setChartMode("line")}
+              >
+                Line
+              </button>
+            </div>
+            <div className={styles.intervalGroup} role="group" aria-label="Timespan">
+              {CHART_RANGE_OPTIONS.map((range) => (
+                <button
+                  key={range}
+                  type="button"
+                  className={
+                    chartRange === range
+                      ? `${styles.intervalButton} ${styles.intervalActive}`
+                      : styles.intervalButton
+                  }
+                  onClick={() => setChartRange(range)}
+                >
+                  {range === "ALL" ? "All" : range}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
         {candles.length === 0 && candlesLoading ? (
           <p className={styles.message}>Loading chart…</p>
         ) : (
-          <PriceChart symbol={symbol} candles={candles} interval={chartInterval} />
+          <PriceChart
+            symbol={symbol}
+            candles={candles}
+            range={chartRange}
+            mode={chartMode}
+          />
         )}
       </section>
 
@@ -364,7 +399,7 @@ export default function MarketFocusPage() {
                   <span>${formatPrice(trade.price)}</span>
                   <span>{formatQty(trade.quantity)}</span>
                   <span className={styles.tradeTime}>
-                    {new Date(trade.timestamp).toLocaleTimeString()}
+                    {formatTime(trade.timestamp, clockFormat)}
                   </span>
                 </li>
               ))}

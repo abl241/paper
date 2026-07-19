@@ -6,6 +6,9 @@ import {
   executeSell,
   getPortfolioDetail,
 } from "../../api/portfolios";
+import CoinIcon from "../../components/CoinIcon";
+import MarketSearchModal from "../../components/MarketSearchModal";
+import { ChevronIcon, SearchIcon } from "../../components/icons";
 import { useActivePortfolio } from "../../contexts/ActivePortfolioContext";
 import { useSettings } from "../../contexts/SettingsContext";
 import type { Ticker } from "../../types/market";
@@ -13,6 +16,32 @@ import { formatMoney } from "./format";
 import styles from "./PortfolioHub.module.css";
 
 const DEFAULT_SYMBOL = "BTC-USD";
+const PRESETS = [0.25, 0.5, 0.75, 1] as const;
+
+type Side = "buy" | "sell";
+type AmountMode = "quantity" | "usd";
+
+function baseAsset(symbol: string): string {
+  return symbol.split("-")[0] ?? symbol;
+}
+
+function formatQty(value: number): string {
+  if (!Number.isFinite(value) || value === 0) {
+    return "0";
+  }
+  if (value >= 1) {
+    return value.toLocaleString(undefined, {
+      maximumFractionDigits: 6,
+    });
+  }
+  return value.toLocaleString(undefined, {
+    maximumSignificantDigits: 6,
+  });
+}
+
+function parseSideParam(value: string | null): Side {
+  return value === "sell" ? "sell" : "buy";
+}
 
 export default function TradeSection() {
   const { portfolioId } = useParams();
@@ -23,15 +52,23 @@ export default function TradeSection() {
 
   const [symbols, setSymbols] = useState<string[]>([]);
   const [selectedSymbol, setSelectedSymbol] = useState(DEFAULT_SYMBOL);
+  const [side, setSide] = useState<Side>(() =>
+    parseSideParam(searchParams.get("side")),
+  );
+  const [amountMode, setAmountMode] = useState<AmountMode>("usd");
+  const [amount, setAmount] = useState("");
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [cashBalance, setCashBalance] = useState(0);
   const [availableQuantity, setAvailableQuantity] = useState(0);
   const [ticker, setTicker] = useState<Ticker | null>(null);
   const [tickerLoading, setTickerLoading] = useState(true);
-  const [quantity, setQuantity] = useState("0.001");
-  const [submitting, setSubmitting] = useState<"buy" | "sell" | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const asset = baseAsset(selectedSymbol);
+  const fillPrice = side === "buy" ? ticker?.ask : ticker?.bid;
 
   useEffect(() => {
     if (portfolioId) {
@@ -68,7 +105,7 @@ export default function TradeSection() {
         setAvailableQuantity(position?.quantity ?? 0);
         setLoading(false);
 
-        if (pref) {
+        if (pref || searchParams.get("side")) {
           const next = new URLSearchParams(searchParams);
           next.delete("symbol");
           next.delete("side");
@@ -120,21 +157,40 @@ export default function TradeSection() {
     };
   }, [selectedSymbol, exchange]);
 
-  const parsedQuantity = Number(quantity);
+  const parsedAmount = Number(amount);
 
-  const estimatedCost = useMemo(() => {
-    if (!ticker || !Number.isFinite(parsedQuantity)) {
+  const resolvedQuantity = useMemo(() => {
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
       return null;
     }
-    return parsedQuantity * ticker.ask;
-  }, [ticker, parsedQuantity]);
-
-  const estimatedProceeds = useMemo(() => {
-    if (!ticker || !Number.isFinite(parsedQuantity)) {
+    if (amountMode === "quantity") {
+      return parsedAmount;
+    }
+    if (!fillPrice || fillPrice <= 0) {
       return null;
     }
-    return parsedQuantity * ticker.bid;
-  }, [ticker, parsedQuantity]);
+    return parsedAmount / fillPrice;
+  }, [amountMode, parsedAmount, fillPrice]);
+
+  const resolvedUsd = useMemo(() => {
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      return null;
+    }
+    if (amountMode === "usd") {
+      return parsedAmount;
+    }
+    if (!fillPrice || fillPrice <= 0) {
+      return null;
+    }
+    return parsedAmount * fillPrice;
+  }, [amountMode, parsedAmount, fillPrice]);
+
+  const canSubmit =
+    resolvedQuantity !== null &&
+    resolvedQuantity > 0 &&
+    !tickerLoading &&
+    !submitting &&
+    ticker !== null;
 
   async function refreshAccount(symbol: string) {
     if (!portfolioId) {
@@ -153,6 +209,7 @@ export default function TradeSection() {
     }
     setError(null);
     setMessage(null);
+    setAmount("");
     setSelectedSymbol(nextSymbol);
     try {
       const detail = await getPortfolioDetail(portfolioId);
@@ -164,30 +221,73 @@ export default function TradeSection() {
     }
   }
 
-  async function handleSubmit(side: "buy" | "sell") {
-    if (!portfolioId) {
+  function applyPreset(fraction: number) {
+    if (!fillPrice || fillPrice <= 0) {
       return;
     }
 
-    setSubmitting(side);
+    if (side === "buy") {
+      const usd = cashBalance * fraction;
+      if (amountMode === "usd") {
+        setAmount(usd > 0 ? usd.toFixed(2) : "");
+      } else {
+        const qty = usd / fillPrice;
+        setAmount(qty > 0 ? formatQty(qty) : "");
+      }
+      return;
+    }
+
+    const qty = availableQuantity * fraction;
+    if (amountMode === "quantity") {
+      setAmount(qty > 0 ? formatQty(qty) : "");
+    } else {
+      const usd = qty * fillPrice;
+      setAmount(usd > 0 ? usd.toFixed(2) : "");
+    }
+  }
+
+  function switchAmountMode(nextMode: AmountMode) {
+    if (nextMode === amountMode) {
+      return;
+    }
+
+    if (Number.isFinite(parsedAmount) && parsedAmount > 0 && fillPrice && fillPrice > 0) {
+      if (nextMode === "usd") {
+        setAmount((parsedAmount * fillPrice).toFixed(2));
+      } else {
+        setAmount(formatQty(parsedAmount / fillPrice));
+      }
+    }
+
+    setAmountMode(nextMode);
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!portfolioId || resolvedQuantity === null) {
+      return;
+    }
+
+    setSubmitting(true);
     setError(null);
     setMessage(null);
 
     try {
-      const input = { symbol: selectedSymbol, quantity: parsedQuantity };
+      const input = { symbol: selectedSymbol, quantity: resolvedQuantity };
       const result =
         side === "buy"
           ? await executeBuy(portfolioId, input)
           : await executeSell(portfolioId, input);
 
       await refreshAccount(selectedSymbol);
+      setAmount("");
       setMessage(
-        `${side === "buy" ? "Buy" : "Sell"} filled at ${formatMoney(result.trade.executionPrice)}. Cash: ${formatMoney(result.cashBalance)}`,
+        `${side === "buy" ? "Bought" : "Sold"} ${formatQty(result.trade.quantity)} ${asset} at ${formatMoney(result.trade.executionPrice)}. Cash: ${formatMoney(result.cashBalance)}`,
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Trade failed");
     } finally {
-      setSubmitting(null);
+      setSubmitting(false);
     }
   }
 
@@ -197,13 +297,68 @@ export default function TradeSection() {
 
   return (
     <div className={styles.tradeLayout}>
-      <div>
-        <p className={styles.lead}>
-          Market orders fill against live quotes for this portfolio.
-        </p>
+      <div className={styles.tradePanel}>
         {activePortfolio && (
           <p className={styles.chip}>Trading in: {activePortfolio.name}</p>
         )}
+
+        <div className={styles.sideToggle} role="tablist" aria-label="Order side">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={side === "buy"}
+            className={
+              side === "buy"
+                ? `${styles.sideTab} ${styles.sideTabBuyActive}`
+                : styles.sideTab
+            }
+            onClick={() => {
+              setSide("buy");
+              setError(null);
+              setMessage(null);
+            }}
+          >
+            Buy
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={side === "sell"}
+            className={
+              side === "sell"
+                ? `${styles.sideTab} ${styles.sideTabSellActive}`
+                : styles.sideTab
+            }
+            onClick={() => {
+              setSide("sell");
+              setError(null);
+              setMessage(null);
+            }}
+          >
+            Sell
+          </button>
+        </div>
+
+        <button
+          type="button"
+          className={styles.symbolPicker}
+          onClick={() => setPickerOpen(true)}
+          aria-haspopup="dialog"
+          aria-expanded={pickerOpen}
+        >
+          <span className={styles.symbolPickerMain}>
+            <CoinIcon symbol={selectedSymbol} size="sm" />
+            <span>
+              <span className={styles.symbolPickerAsset}>{asset}</span>
+              <span className={styles.symbolPickerPair}>{selectedSymbol}</span>
+            </span>
+          </span>
+          <span className={styles.symbolPickerAction}>
+            <SearchIcon />
+            Change
+            <ChevronIcon />
+          </span>
+        </button>
 
         <div className={styles.accountGrid}>
           <article className={styles.summaryCard}>
@@ -211,61 +366,97 @@ export default function TradeSection() {
             <p>{formatMoney(cashBalance)}</p>
           </article>
           <article className={styles.summaryCard}>
-            <h2>Position available</h2>
-            <p>
-              {availableQuantity} {selectedSymbol.split("-")[0]}
-            </p>
+            <h2>{asset} available</h2>
+            <p>{formatQty(availableQuantity)}</p>
           </article>
         </div>
 
-        <form
-          onSubmit={(event: FormEvent<HTMLFormElement>) => event.preventDefault()}
-        >
-          <label className={styles.field}>
-            <span className={styles.label}>Trading pair</span>
-            <select
-              className={styles.select}
-              value={selectedSymbol}
-              onChange={(event) => void handleSymbolChange(event.target.value)}
+        <form className={styles.tradeForm} onSubmit={(event) => void handleSubmit(event)}>
+          <div className={styles.modeToggle} role="group" aria-label="Amount unit">
+            <button
+              type="button"
+              className={
+                amountMode === "usd"
+                  ? `${styles.modeTab} ${styles.modeTabActive}`
+                  : styles.modeTab
+              }
+              onClick={() => switchAmountMode("usd")}
             >
-              {symbols.map((symbol) => (
-                <option key={symbol} value={symbol}>
-                  {symbol}
-                </option>
-              ))}
-            </select>
+              USD
+            </button>
+            <button
+              type="button"
+              className={
+                amountMode === "quantity"
+                  ? `${styles.modeTab} ${styles.modeTabActive}`
+                  : styles.modeTab
+              }
+              onClick={() => switchAmountMode("quantity")}
+            >
+              {asset}
+            </button>
+          </div>
+
+          <label className={styles.amountField}>
+            <span className={styles.label}>
+              {amountMode === "usd" ? "Amount in USD" : `Amount in ${asset}`}
+            </span>
+            <div className={styles.amountInputWrap}>
+              <span className={styles.amountPrefix} aria-hidden="true">
+                {amountMode === "usd" ? "$" : asset}
+              </span>
+              <input
+                className={styles.amountInput}
+                type="number"
+                min="0"
+                step="any"
+                inputMode="decimal"
+                placeholder="0.00"
+                value={amount}
+                onChange={(event) => setAmount(event.target.value)}
+                required
+              />
+            </div>
           </label>
 
-          <label className={styles.field} style={{ marginTop: "0.75rem" }}>
-            <span className={styles.label}>Quantity</span>
-            <input
-              className={styles.input}
-              type="number"
-              min="0"
-              step="any"
-              value={quantity}
-              onChange={(event) => setQuantity(event.target.value)}
-              required
-            />
-          </label>
+          <div className={styles.presetRow} role="group" aria-label="Quick amounts">
+            {PRESETS.map((fraction) => (
+              <button
+                key={fraction}
+                type="button"
+                className={styles.presetButton}
+                disabled={tickerLoading || !fillPrice}
+                onClick={() => applyPreset(fraction)}
+              >
+                {fraction === 1 ? "Max" : `${fraction * 100}%`}
+              </button>
+            ))}
+          </div>
 
-          <div className={styles.quoteCard} style={{ marginTop: "1rem" }}>
+          <div className={styles.conversionCard}>
             {tickerLoading && <p className={styles.message}>Loading live quote…</p>}
             {ticker && !tickerLoading && (
               <>
-                <p>
-                  Bid: {formatMoney(ticker.bid)} · Ask: {formatMoney(ticker.ask)} ·
-                  Last: {formatMoney(ticker.last)}
-                </p>
-                <p>
-                  Est. buy cost:{" "}
-                  {estimatedCost === null ? "—" : formatMoney(estimatedCost)}
-                </p>
-                <p>
-                  Est. sell proceeds:{" "}
-                  {estimatedProceeds === null
-                    ? "—"
-                    : formatMoney(estimatedProceeds)}
+                <div className={styles.conversionRow}>
+                  <span>Market {side === "buy" ? "ask" : "bid"}</span>
+                  <strong>{formatMoney(fillPrice ?? 0)}</strong>
+                </div>
+                <div className={styles.conversionRow}>
+                  <span>You {side === "buy" ? "pay" : "receive"}</span>
+                  <strong>
+                    {resolvedUsd === null ? "—" : formatMoney(resolvedUsd)}
+                  </strong>
+                </div>
+                <div className={styles.conversionRow}>
+                  <span>You {side === "buy" ? "get" : "sell"}</span>
+                  <strong>
+                    {resolvedQuantity === null
+                      ? "—"
+                      : `${formatQty(resolvedQuantity)} ${asset}`}
+                  </strong>
+                </div>
+                <p className={styles.conversionHint}>
+                  Market order · fills at the live {side === "buy" ? "ask" : "bid"}
                 </p>
               </>
             )}
@@ -278,29 +469,28 @@ export default function TradeSection() {
           )}
           {message && <div className={styles.success}>{message}</div>}
 
-          <div className={styles.tradeActions} style={{ marginTop: "1rem" }}>
-            <button
-              className={styles.buyButton}
-              type="button"
-              disabled={submitting !== null || tickerLoading}
-              onClick={() => void handleSubmit("buy")}
-            >
-              {submitting === "buy" ? "Buying…" : "Buy"}
-            </button>
-            <button
-              className={styles.sellButton}
-              type="button"
-              disabled={submitting !== null || tickerLoading}
-              onClick={() => void handleSubmit("sell")}
-            >
-              {submitting === "sell" ? "Selling…" : "Sell"}
-            </button>
-          </div>
+          <button
+            className={
+              side === "buy" ? styles.buyButton : styles.sellButton
+            }
+            type="submit"
+            disabled={!canSubmit}
+          >
+            {submitting
+              ? side === "buy"
+                ? "Buying…"
+                : "Selling…"
+              : `${side === "buy" ? "Buy" : "Sell"} ${asset}`}
+          </button>
         </form>
       </div>
 
-      <aside>
-        <h2 className={styles.sectionTitle}>After you fill</h2>
+      <aside className={styles.tradeAside}>
+        <h2 className={styles.sectionTitle}>Order preview</h2>
+        <p className={styles.hint}>
+          Enter a USD amount or an {asset} quantity. Presets use your available{" "}
+          {side === "buy" ? "cash" : "position"}.
+        </p>
         <p className={styles.hint}>
           Review fills on{" "}
           <Link className={styles.inlineLink} to={`/portfolio/${portfolioId}/history`}>
@@ -315,7 +505,26 @@ export default function TradeSection() {
           </Link>
           .
         </p>
+        <p className={styles.hint}>
+          <Link
+            className={styles.inlineLink}
+            to={`/markets/${encodeURIComponent(selectedSymbol)}`}
+          >
+            Open {selectedSymbol} focus view
+          </Link>{" "}
+          for chart and order book.
+        </p>
       </aside>
+
+      <MarketSearchModal
+        open={pickerOpen}
+        symbols={symbols}
+        onClose={() => setPickerOpen(false)}
+        onSelect={(symbol) => void handleSymbolChange(symbol)}
+        title="Select a market"
+        subtitle="Search any pair to trade in this portfolio"
+        actionLabel="Select"
+      />
     </div>
   );
 }

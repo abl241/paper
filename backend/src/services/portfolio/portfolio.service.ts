@@ -37,6 +37,7 @@ import { EXCHANGE_OPTIONS } from "../../types/settings.js";
 import { roundUsd } from "../../utils/decimal.js";
 import { marketService } from "../market/market.service.js";
 import { settingsService } from "../settings/settings.service.js";
+import { buildMarkedEquityCurve } from "./equityCurve.builder.js";
 
 function toListItem(portfolio: PortfolioRecord): PortfolioListItem {
   return {
@@ -349,32 +350,15 @@ export class PortfolioService {
     const losses = closed.filter((t) => (t.realizedPnL ?? 0) < 0);
     const realizedValues = closed.map((t) => t.realizedPnL ?? 0);
 
-    let cash = detail.portfolio.startingCash;
-    const equityCurve: PerformanceStats["equityCurve"] = [
-      {
-        t: detail.portfolio.createdAt.toISOString(),
-        equity: cash,
-        kind: "cash_path",
-      },
-    ];
-
-    for (const trade of chronological) {
-      const notional = trade.quantity * trade.executionPrice;
-      cash =
-        trade.side === "buy"
-          ? roundUsd(cash - notional)
-          : roundUsd(cash + notional);
-      equityCurve.push({
-        t: trade.executedAt.toISOString(),
-        equity: cash,
-        kind: "cash_path",
-      });
-    }
-
-    equityCurve.push({
-      t: new Date().toISOString(),
-      equity: detail.summary.totalEquity,
-      kind: "marked",
+    const exchange = await this.resolveExchange(userId, detail.portfolio);
+    const settings = await settingsService.getSettings(userId);
+    const equityCurve = await buildMarkedEquityCurve({
+      startingCash: detail.portfolio.startingCash,
+      createdAt: detail.portfolio.createdAt,
+      trades: chronological,
+      exchange,
+      resolution: settings.equityResolution,
+      currentEquity: detail.summary.totalEquity,
     });
 
     return {

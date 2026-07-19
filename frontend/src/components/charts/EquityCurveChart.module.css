@@ -1,0 +1,145 @@
+.wrap {
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  padding: 0.9rem 1rem 0.65rem;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.readout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.45rem 0.75rem;
+  min-width: 0;
+}
+
+.legendSeries {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  color: #334155;
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.legendSwatch {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 999px;
+}
+
+.readoutLabel {
+  width: 100%;
+  color: #64748b;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.readoutValue {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.changePositive {
+  color: #15803d;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.changeNegative {
+  color: #b91c1c;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.rangeToggle {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  padding: 0.2rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  background: #f8fafc;
+}
+
+.rangeButton {
+  border: none;
+  border-radius: 0.375rem;
+  padding: 0.4rem 0.65rem;
+  background: transparent;
+  color: #64748b;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.rangeButton:hover {
+  color: #0f172a;
+}
+
+.rangeButtonActive {
+  background: #0f172a;
+  color: #ffffff;
+}
+
+.chart {
+  width: 100%;
+  height: 260px;
+}
+
+.chartCompact {
+  width: 100%;
+  height: 180px;
+}
+
+.metaGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border-top: 1px solid #f1f5f9;
+  background: #f8fafc;
+}
+
+.metaGrid span {
+  display: block;
+  margin-bottom: 0.2rem;
+  color: #64748b;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.metaGrid strong {
+  color: #0f172a;
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+
+.empty {
+  margin: 0;
+  padding: 1.5rem 1.25rem;
+  color: #64748b;
+  font-size: 0.9375rem;
+}
+
+@media (max-width: 720px) {
+  .metaGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

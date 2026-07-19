@@ -1,50 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { getPortfolioPerformance } from "../../api/portfolios";
+import EquityCurveChart from "../../components/charts/EquityCurveChart";
 import { useActivePortfolio } from "../../contexts/ActivePortfolioContext";
+import { useSettings } from "../../contexts/SettingsContext";
 import type { PerformanceStats } from "../../types/portfolio";
 import { formatMoney, formatPct, formatPnL } from "./format";
 import styles from "./PortfolioHub.module.css";
 
-function EquityCurve({ points }: { points: PerformanceStats["equityCurve"] }) {
-  const path = useMemo(() => {
-    if (points.length < 2) {
-      return null;
-    }
-
-    const values = points.map((p) => p.equity);
-    const min = Math.min(...values);
-    const max = Math.max(...values);
-    const span = max - min || 1;
-    const width = 640;
-    const height = 200;
-    const pad = 12;
-
-    return points
-      .map((point, index) => {
-        const x =
-          pad + (index / (points.length - 1)) * (width - pad * 2);
-        const y =
-          height - pad - ((point.equity - min) / span) * (height - pad * 2);
-        return `${index === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`;
-      })
-      .join(" ");
-  }, [points]);
-
-  if (!path) {
-    return <p className={styles.message}>Not enough history for a curve yet.</p>;
-  }
-
-  return (
-    <svg className={styles.curve} viewBox="0 0 640 220" role="img" aria-label="Equity curve">
-      <path d={path} fill="none" stroke="#0f172a" strokeWidth="2" />
-    </svg>
-  );
-}
-
 export default function PerformanceSection() {
   const { portfolioId } = useParams();
   const { setActivePortfolioId } = useActivePortfolio();
+  const { equityResolution } = useSettings();
   const [stats, setStats] = useState<PerformanceStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -86,7 +53,7 @@ export default function PerformanceSection() {
     return () => {
       cancelled = true;
     };
-  }, [portfolioId]);
+  }, [portfolioId, equityResolution]);
 
   if (loading) {
     return <p className={styles.message}>Loading performance…</p>;
@@ -103,8 +70,7 @@ export default function PerformanceSection() {
   return (
     <>
       <p className={styles.lead}>
-        Return vs starting cash, closed-trade stats, and a cash-path equity curve
-        with a final marked equity point.
+        Return vs starting cash, closed-trade stats, and equity over time.
       </p>
 
       <div className={styles.summaryGrid}>
@@ -161,10 +127,13 @@ export default function PerformanceSection() {
 
       <div className={styles.section}>
         <h2 className={styles.sectionTitle}>Equity curve</h2>
-        <EquityCurve points={stats.equityCurve} />
+        <EquityCurveChart
+          points={stats.equityCurve}
+          startingCash={stats.startingCash}
+        />
         <p className={styles.hint}>
-          Intermediate points follow cash after each fill; the last point marks
-          open positions at current prices.
+          Portfolio value over time (cash + positions marked to market), sampled
+          from candle history. Change density and Y-axis zoom in Settings.
         </p>
       </div>
     </>

@@ -8,6 +8,11 @@ interface MarketSearchModalProps {
   open: boolean;
   symbols: string[];
   onClose: () => void;
+  /** When set, selecting a symbol calls this instead of navigating to Focus. */
+  onSelect?: (symbol: string) => void;
+  title?: string;
+  subtitle?: string;
+  actionLabel?: string;
 }
 
 const RESULT_LIMIT = 25;
@@ -16,6 +21,10 @@ export default function MarketSearchModal({
   open,
   symbols,
   onClose,
+  onSelect,
+  title = "Find a market",
+  subtitle = "Open a focused view for any pair",
+  actionLabel = "Focus",
 }: MarketSearchModalProps) {
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -73,9 +82,9 @@ export default function MarketSearchModal({
         <div className={styles.header}>
           <div>
             <h2 id={titleId} className={styles.title}>
-              Find a market
+              {title}
             </h2>
-            <p className={styles.subtitle}>Open a focused view for any pair</p>
+            <p className={styles.subtitle}>{subtitle}</p>
           </div>
           <button
             type="button"
@@ -110,6 +119,10 @@ export default function MarketSearchModal({
                   className={styles.resultButton}
                   onClick={() => {
                     onClose();
+                    if (onSelect) {
+                      onSelect(symbol);
+                      return;
+                    }
                     navigate(`/markets/${encodeURIComponent(symbol)}`);
                   }}
                 >
@@ -118,8 +131,8 @@ export default function MarketSearchModal({
                   </span>
                   <span className={styles.resultSymbol}>{symbol}</span>
                   <span className={styles.resultAction}>
-                    <FocusIcon />
-                    Focus
+                    {!onSelect && <FocusIcon />}
+                    {actionLabel}
                   </span>
                 </button>
               </li>

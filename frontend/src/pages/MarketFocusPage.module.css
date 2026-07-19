@@ -173,6 +173,19 @@
   gap: 0.375rem;
 }
 
+.chartControls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.modeGroup {
+  display: flex;
+  gap: 0.375rem;
+}
+
 .intervalButton {
   padding: 0.35rem 0.6rem;
   border: 1px solid #e2e8f0;

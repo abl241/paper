@@ -2,13 +2,16 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { getPortfolioTrades } from "../../api/portfolios";
 import { useActivePortfolio } from "../../contexts/ActivePortfolioContext";
+import { useSettings } from "../../contexts/SettingsContext";
 import type { Trade } from "../../types/portfolio";
+import { formatDateTime } from "../../utils/datetime";
 import { formatMoney, formatPnL } from "./format";
 import styles from "./PortfolioHub.module.css";
 
 export default function HistorySection() {
   const { portfolioId } = useParams();
   const { setActivePortfolioId } = useActivePortfolio();
+  const { clockFormat } = useSettings();
   const [trades, setTrades] = useState<Trade[]>([]);
   const [symbol, setSymbol] = useState("");
   const [side, setSide] = useState<"" | "buy" | "sell">("");
@@ -134,7 +137,7 @@ export default function HistorySection() {
             <tbody>
               {trades.map((trade) => (
                 <tr key={trade.id}>
-                  <td>{new Date(trade.executedAt).toLocaleString()}</td>
+                  <td>{formatDateTime(trade.executedAt, clockFormat)}</td>
                   <td>{trade.symbol}</td>
                   <td className={trade.side === "buy" ? styles.buy : styles.sell}>
                     {trade.side}

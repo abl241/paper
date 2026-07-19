@@ -20,9 +20,13 @@ import type {
 
 /** Cap Gemini's large candle payloads to a usable recent window. */
 const CANDLE_LOOKBACK_MS: Record<string, number> = {
-  "1hr": 1000 * 60 * 60 * 48,
-  "6hr": 1000 * 60 * 60 * 24 * 14,
-  "1day": 1000 * 60 * 60 * 24 * 90,
+  "1m": 1000 * 60 * 60 * 24,
+  "5m": 1000 * 60 * 60 * 24 * 7,
+  "15m": 1000 * 60 * 60 * 24 * 21,
+  "30m": 1000 * 60 * 60 * 24 * 45,
+  "1hr": 1000 * 60 * 60 * 24 * 90,
+  "6hr": 1000 * 60 * 60 * 24 * 180,
+  "1day": 1000 * 60 * 60 * 24 * 730,
 };
 
 export class GeminiExchange implements Exchange {
