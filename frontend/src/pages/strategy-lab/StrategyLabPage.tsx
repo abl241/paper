@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   createStrategy,
@@ -10,7 +10,10 @@ import {
   updateStrategy,
   validateStrategy,
 } from "../../api/strategies";
-import StrategyCodeEditor from "../../components/strategy/StrategyCodeEditor";
+import ApiExplorerPanel from "../../components/strategy/ApiExplorerPanel";
+import StrategyCodeEditor, {
+  type StrategyCodeEditorHandle,
+} from "../../components/strategy/StrategyCodeEditor";
 import { useAuth } from "../../contexts/AuthContext";
 import type {
   StrategyDetail,
@@ -46,6 +49,9 @@ export default function StrategyLabPage() {
   const [error, setError] = useState<string | null>(null);
   const [consoleEntries, setConsoleEntries] = useState<ConsoleEntry[]>([]);
   const [filter, setFilter] = useState("");
+  const [apiExplorerOpen, setApiExplorerOpen] = useState(false);
+  const [activeApiId, setActiveApiId] = useState<string | null>(null);
+  const editorRef = useRef<StrategyCodeEditorHandle | null>(null);
 
   const pushConsole = useCallback(
     (level: ConsoleEntry["level"], text: string) => {
@@ -328,6 +334,24 @@ export default function StrategyLabPage() {
     patchDraft({ params: next });
   }
 
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      const mod = event.metaKey || event.ctrlKey;
+      if (mod && event.shiftKey && event.key.toLowerCase() === "d") {
+        event.preventDefault();
+        setApiExplorerOpen((open) => !open);
+        return;
+      }
+      if (event.key === "Escape" && apiExplorerOpen) {
+        event.preventDefault();
+        setApiExplorerOpen(false);
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [apiExplorerOpen]);
+
   if (!isAuthenticated) {
     return null;
   }
@@ -380,6 +404,19 @@ export default function StrategyLabPage() {
           >
             Validate
           </button>
+          <button
+            type="button"
+            className={
+              apiExplorerOpen
+                ? `${styles.button} ${styles.buttonPrimary}`
+                : styles.button
+            }
+            aria-pressed={apiExplorerOpen}
+            title="API Explorer (Ctrl/Cmd+Shift+D)"
+            onClick={() => setApiExplorerOpen((open) => !open)}
+          >
+            API
+          </button>
           {draft ? (
             <Link
               className={`${styles.button} ${styles.buttonLink}`}
@@ -409,7 +446,14 @@ export default function StrategyLabPage() {
         </div>
       ) : null}
 
-      <div className={styles.grid}>
+      <div className={styles.workspace}>
+      <div
+        className={
+          apiExplorerOpen
+            ? `${styles.grid} ${styles.gridApiOpen}`
+            : styles.grid
+        }
+      >
         <aside className={styles.library}>
           <div className={styles.panelHeader}>
             <h2>Library</h2>
@@ -508,8 +552,14 @@ export default function StrategyLabPage() {
           <div className={styles.editorShell}>
             {draft ? (
               <StrategyCodeEditor
+                ref={editorRef}
                 value={draft.sourceCode}
                 onChange={(sourceCode) => patchDraft({ sourceCode })}
+                onApiSymbol={(apiId) => {
+                  if (apiExplorerOpen && apiId) {
+                    setActiveApiId(apiId);
+                  }
+                }}
               />
             ) : (
               <div className={styles.emptyEditor}>
@@ -519,6 +569,29 @@ export default function StrategyLabPage() {
           </div>
         </div>
 
+        {apiExplorerOpen ? (
+          <aside className={styles.apiDock}>
+            <button
+              type="button"
+              className={styles.apiEdgeTab}
+              aria-label="Collapse API Explorer"
+              title="Collapse API Explorer"
+              onClick={() => setApiExplorerOpen(false)}
+            >
+              ›
+            </button>
+            <div className={styles.apiDockBody}>
+              <ApiExplorerPanel
+                activeApiId={activeApiId}
+                onSelectApi={setActiveApiId}
+                onClose={() => setApiExplorerOpen(false)}
+                onInsertExample={(example) => {
+                  editorRef.current?.insertText(example);
+                }}
+              />
+            </div>
+          </aside>
+        ) : (
         <aside className={styles.properties}>
           <div className={styles.panelHeader}>
             <h2>Properties</h2>
@@ -733,6 +806,7 @@ export default function StrategyLabPage() {
             </div>
           )}
         </aside>
+        )}
 
         <div className={styles.console}>
           <div className={styles.panelHeader}>
@@ -765,6 +839,20 @@ export default function StrategyLabPage() {
             )}
           </div>
         </div>
+      </div>
+
+      {!apiExplorerOpen ? (
+        <button
+          type="button"
+          className={styles.apiEdgeTabCollapsed}
+          aria-label="Open API Explorer"
+          title="Open API Explorer (Ctrl/Cmd+Shift+D)"
+          onClick={() => setApiExplorerOpen(true)}
+        >
+          <span className={styles.apiEdgeChevron}>‹</span>
+          <span>API</span>
+        </button>
+      ) : null}
       </div>
     </section>
   );

@@ -4,6 +4,7 @@
  */
 
 export const STRATEGY_API_DTS = `
+/** OHLCV bar. time is Unix seconds. */
 interface Bar {
   time: number;
   open: number;
@@ -13,6 +14,7 @@ interface Bar {
   volume: number;
 }
 
+/** Open position snapshot. */
 interface PositionView {
   symbol: string;
   size: number;
@@ -20,12 +22,14 @@ interface PositionView {
   unrealizedPnL: number;
 }
 
+/** Portfolio cash, equity, and positions. */
 interface PortfolioView {
   cash: number;
   equity: number;
   positions: PositionView[];
 }
 
+/** Optional order sizing for buy/sell. */
 interface OrderIntent {
   symbol?: string;
   quantity?: number;
@@ -34,9 +38,13 @@ interface OrderIntent {
 }
 
 interface Indicators {
+  /** RSI on closes. Default period 14. */
   rsi(bars: Bar[], period?: number): number;
+  /** Exponential moving average of closes. */
   ema(bars: Bar[], period: number): number;
+  /** Simple moving average of closes. */
   sma(bars: Bar[], period: number): number;
+  /** MACD with optional fast/slow/signal periods (defaults 12/26/9). */
   macd(
     bars: Bar[],
     fast?: number,
@@ -45,18 +53,31 @@ interface Indicators {
   ): { macd: number; signal: number; histogram: number };
 }
 
+/** Controlled API available inside strategy(ctx). */
 interface StrategyContext {
+  /** Current market symbol for this bar evaluation. */
   symbol: string;
+  /** OHLCV bars up to the current bar (oldest first). */
   bars: Bar[];
+  /** Latest price for the current bar. */
   price: number;
+  /** Open position for the current symbol. */
   position: PositionView;
+  /** Available cash balance. */
   cash: number;
+  /** Total portfolio equity. */
   equity: number;
+  /** Full portfolio view including all positions. */
   portfolio: PortfolioView;
+  /** User-defined strategy parameters from the Lab. */
   params: Record<string, number | string | boolean>;
+  /** Submit a paper buy. Size via quantity, fractionOfEquity, or fractionOfCash. */
   buy(order?: OrderIntent): void;
+  /** Sell some or all of the current long position. */
   sell(order?: OrderIntent): void;
+  /** Technical indicator helpers. */
   indicator: Indicators;
+  /** Append a message to strategy logs. */
   log(message: string): void;
 }
 

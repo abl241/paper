@@ -33,6 +33,13 @@
   gap: var(--space-2);
 }
 
+.workspace {
+  position: relative;
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
 .grid {
   flex: 1;
   display: grid;
@@ -40,11 +47,18 @@
   grid-template-rows: minmax(20rem, 1fr) minmax(9rem, 12rem);
   gap: var(--space-3);
   min-height: 0;
+  min-width: 0;
+  transition: grid-template-columns 180ms ease;
+}
+
+.gridApiOpen {
+  grid-template-columns: minmax(14rem, 17rem) minmax(0, 1fr) minmax(26rem, 34rem);
 }
 
 .library,
 .editorPane,
 .properties,
+.apiDock,
 .console {
   display: flex;
   flex-direction: column;
@@ -64,14 +78,89 @@
   grid-row: 1;
 }
 
-.properties {
+.properties,
+.apiDock {
   grid-column: 3;
   grid-row: 1 / span 2;
+}
+
+.apiDock {
+  flex-direction: row;
+  align-items: stretch;
+}
+
+.apiDockBody {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .console {
   grid-column: 2;
   grid-row: 2;
+}
+
+.apiEdgeTab {
+  flex: 0 0 1.35rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-right: 1px solid var(--sheet-edge);
+  background: color-mix(in srgb, var(--sheet) 70%, var(--accent-soft));
+  color: var(--ink-muted);
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.apiEdgeTab:hover {
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+.apiEdgeTabCollapsed {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+  width: 1.6rem;
+  padding: 0.85rem 0;
+  border: 1px solid var(--sheet-edge);
+  border-right: none;
+  border-radius: var(--radius-md) 0 0 var(--radius-md);
+  background: var(--paper-elevated);
+  color: var(--ink-muted);
+  box-shadow: -2px 0 10px color-mix(in srgb, var(--ink) 6%, transparent);
+  transform: translateY(-50%);
+  cursor: pointer;
+}
+
+.apiEdgeTabCollapsed:hover {
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+.apiEdgeTabCollapsed span {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.apiEdgeChevron {
+  font-size: 0.75rem;
+  line-height: 1;
 }
 
 .panelHeader {
@@ -161,6 +250,12 @@
 .editorShell {
   flex: 1;
   min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.editorShell > div {
+  height: 100%;
 }
 
 .emptyEditor {
@@ -189,12 +284,18 @@
 .field input,
 .field textarea,
 .field select {
+  width: 100%;
+  box-sizing: border-box;
   padding: 0.45rem 0.55rem;
   border: 1px solid var(--sheet-edge);
   border-radius: var(--radius-sm);
   background: var(--sheet);
   color: var(--ink);
   font: inherit;
+}
+
+.field textarea {
+  resize: none;
 }
 
 .fieldset {
@@ -374,7 +475,8 @@
 }
 
 @media (max-width: 1100px) {
-  .grid {
+  .grid,
+  .gridApiOpen {
     grid-template-columns: 1fr;
     grid-template-rows: auto;
   }
@@ -382,10 +484,15 @@
   .library,
   .editorPane,
   .properties,
+  .apiDock,
   .console {
     grid-column: 1;
     grid-row: auto;
     min-height: 16rem;
+  }
+
+  .apiEdgeTabCollapsed {
+    display: none;
   }
 
   .editorShell {

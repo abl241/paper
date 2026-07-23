@@ -44,6 +44,12 @@ Paper is that project: equal parts market curiosity and systems engineering.
 - Portfolio hub: overview, trade, history, performance, settings
 - Preferred exchange and account settings
 
+### Strategy Lab & Research
+- Author TypeScript strategies against a controlled `StrategyContext` API (orders, bars, indicators, portfolio)
+- Validate with dry-run; templates for SMA crossover, RSI mean reversion, and a blank scaffold
+- **API Explorer** — searchable in-lab docs dock (toolbar **API**, edge tab, or Ctrl/Cmd+Shift+D); Monaco autocomplete + JSDoc hover; Insert Example into the editor
+- Research runs historical backtests on saved strategies using the same Strategy API
+
 ---
 
 ## Architecture
@@ -75,7 +81,7 @@ Paper is that project: equal parts market curiosity and systems engineering.
 
 | Layer | |
 |-------|--|
-| Frontend | React 19 · React Router · Vite · TypeScript · CSS Modules · Lightweight Charts |
+| Frontend | React 19 · React Router · Vite · TypeScript · CSS Modules · Monaco · Lightweight Charts |
 | Backend | Node.js · Express · TypeScript · `ws` |
 | Data | PostgreSQL · versioned SQL migrations |
 | Auth | JWT · bcrypt |
@@ -89,8 +95,8 @@ npm workspaces monorepo: `backend/` + `frontend/`.
 
 ```
 paper/
-├── backend/     # API, exchange adapters, WS broker, migrations
-├── frontend/    # markets, portfolio, charts, settings
+├── backend/     # API, exchange adapters, WS broker, strategies, research, migrations
+├── frontend/    # markets, portfolio, Strategy Lab, Research, charts, settings
 ├── package.json
 └── .env.example
 ```
@@ -119,12 +125,13 @@ A few intentional choices:
 2. **Portfolios own state** — cash, positions, and trades hang off `portfolio_id`, so strategies stay isolated.
 3. **Paper ≠ toy** — fills still use bid/ask, validate quantity, and reject insufficient cash or size.
 4. **Cheap streams** — reference-counted upstream subscriptions keep the wire quiet when nobody is watching.
+5. **Strategy API sandbox** — Lab strategies talk only to `StrategyContext` (no imports/`fetch`); Research reuses that surface for backtests.
 
 ---
 
 ## Status
 
-Active personal project. The core loop — live data → paper trade → portfolio — works. Ongoing work: UX polish, broader exchange coverage, richer performance analytics.
+Active personal project. The core loop — live data → paper trade → portfolio — works. Strategy Lab and Research cover authoring and backtesting. Ongoing work: UX polish, broader exchange coverage, richer performance analytics, live paper strategy runners.
 
 ---
 
