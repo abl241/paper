@@ -30,3 +30,16 @@
   padding: 0;
   overflow: hidden;
 }
+
+.workspaceHome {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+  min-height: calc(100vh - 10rem);
+}
+
+.mainWide:has(.workspaceHome) {
+  padding: 0;
+}
