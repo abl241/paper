@@ -26,29 +26,53 @@ Paper is that project: equal parts market curiosity and systems engineering.
 
 ## Features
 
-### Markets & data
-- Live tickers, symbol search, and watchlists
+Paper is organized around the main nav tabs. Each one is a stage in the paper-trading loop.
+
+### Home
+Landing overview of the product: what Paper is, how the loop works (watch → trade → build → backtest), and quick links into the main workspaces.
+
+### Markets
+Browse live crypto markets from Gemini or Coinbase.
+- Symbol search and watchlists
+- Live tickers with bid/ask and volume
 - Focused symbol view with candlestick charts (TradingView Lightweight Charts)
-- Real-time bid/ask and trade prints via WebSocket
+- Real-time trade prints over WebSocket
+
+### Portfolio
+Paper trading desk for one or more isolated portfolios (cash, positions, and history per portfolio). Sub-tabs:
+
+| Tab | What it does |
+|-----|----------------|
+| **Overview** | Equity, cash, open positions, and a high-level snapshot of the book |
+| **Trade** | Place simulated market buys/sells filled at live ask/bid |
+| **History** | Full fill / trade log for the selected portfolio |
+| **Performance** | Equity curve and performance view over time |
+| **Settings** | Portfolio-level options (e.g. name, exchange preference, cash deposits / withdrawals / reset) |
+
+### Strategy Lab
+Author and validate TypeScript strategies against a controlled `StrategyContext` API (no imports or `fetch` — only buy/sell, bars, indicators, portfolio, and params).
+- Library of templates (SMA crossover, RSI mean reversion, blank scaffold) plus your saved drafts
+- Monaco editor with autocomplete and JSDoc hover
+- Properties for symbols, timeframe, params, and risk metadata
+- Validate / dry-run with console output
+- **API Explorer** — searchable docs dock (toolbar **API**, right-edge tab, or Ctrl/Cmd+Shift+D); Insert Example pastes snippets into the editor
+
+### Research
+Backtest saved Lab strategies on historical candles using the same Strategy API.
+- Pick strategy, symbol, range, and timeframe
+- Run backtests and inspect equity / results
+- Jump in from Strategy Lab with a strategy pre-selected
+
+### Settings
+Account-wide preferences: preferred exchange, price refresh interval, equity chart defaults (range, resolution, y-axis), and clock format.
+
+### System
+Live backend health check against `/health` (API up, DB connectivity). Useful when debugging local or deployed environments.
+
+### Cross-cutting
+- JWT auth (register / login); Strategy Lab, Research, and Portfolio require a session
 - Exchange-agnostic market layer (Gemini REST + WS, Coinbase REST)
-
-### Trading & portfolios
-- Market buys/sells filled at live ask/bid
-- Multiple portfolios per user — isolated cash, positions, and trade history
-- Per-portfolio (or default) exchange preference
-- Cash ledger for deposits, withdrawals, and resets
-- Position tracking with average cost; full trade history
-
-### Product
-- JWT auth (register / login)
-- Portfolio hub: overview, trade, history, performance, settings
-- Preferred exchange and account settings
-
-### Strategy Lab & Research
-- Author TypeScript strategies against a controlled `StrategyContext` API (orders, bars, indicators, portfolio)
-- Validate with dry-run; templates for SMA crossover, RSI mean reversion, and a blank scaffold
-- **API Explorer** — searchable in-lab docs dock (toolbar **API**, edge tab, or Ctrl/Cmd+Shift+D); Monaco autocomplete + JSDoc hover; Insert Example into the editor
-- Research runs historical backtests on saved strategies using the same Strategy API
+- Concurrent paper fills use SQL transactions with row locks so cash and positions stay consistent
 
 ---
 
