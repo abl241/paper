@@ -23,6 +23,53 @@ export async function listSymbols(
   }
 }
 
+export async function getSummaries(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const quote =
+      typeof req.query.quote === "string" ? req.query.quote : undefined;
+    const symbolsParam =
+      typeof req.query.symbols === "string" ? req.query.symbols : undefined;
+    const symbols = symbolsParam
+      ? symbolsParam
+          .split(",")
+          .map((part) => part.trim())
+          .filter(Boolean)
+      : undefined;
+
+    const limit =
+      typeof req.query.limit === "string" && req.query.limit.trim() !== ""
+        ? Number(req.query.limit)
+        : undefined;
+    const offset =
+      typeof req.query.offset === "string" && req.query.offset.trim() !== ""
+        ? Number(req.query.offset)
+        : undefined;
+
+    if (limit !== undefined && (!Number.isFinite(limit) || limit < 1)) {
+      throw new AppError("Invalid limit", 400, "INVALID_LIMIT");
+    }
+    if (offset !== undefined && (!Number.isFinite(offset) || offset < 0)) {
+      throw new AppError("Invalid offset", 400, "INVALID_OFFSET");
+    }
+
+    const result = await marketService.getSummaries({
+      exchange: exchangeFromRequest(req),
+      quote,
+      symbols,
+      limit,
+      offset,
+    });
+
+    res.status(200).json({ data: result });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function getTicker(
   req: Request,
   res: Response,

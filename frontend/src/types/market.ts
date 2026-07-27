@@ -7,6 +7,21 @@ export interface Ticker {
   timestamp: string;
 }
 
+export interface MarketSummary {
+  symbol: string;
+  bid: number;
+  ask: number;
+  last: number;
+  volume24h: number;
+  change24h?: number;
+  timestamp: string;
+}
+
+export interface MarketSummariesResponse {
+  items: MarketSummary[];
+  total: number;
+}
+
 export interface OrderBookLevel {
   price: number;
   quantity: number;

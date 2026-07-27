@@ -1,5 +1,12 @@
 import { apiClient } from "./client";
-import type { ApiResponse, Candle, MarketTrade, OrderBook, Ticker } from "../types/market";
+import type {
+  ApiResponse,
+  Candle,
+  MarketSummariesResponse,
+  MarketTrade,
+  OrderBook,
+  Ticker,
+} from "../types/market";
 import { getPreferredExchange } from "../utils/preferredExchange";
 
 function exchangeParams(extra?: Record<string, string>): {
@@ -17,6 +24,28 @@ export async function listSymbols(): Promise<string[]> {
   const { data } = await apiClient.get<ApiResponse<string[]>>(
     "/markets/symbols",
     exchangeParams(),
+  );
+  return data.data;
+}
+
+export async function getMarketSummaries(options?: {
+  quote?: string;
+  symbols?: string[];
+  limit?: number;
+  offset?: number;
+}): Promise<MarketSummariesResponse> {
+  const extra: Record<string, string> = {};
+  if (options?.quote) extra.quote = options.quote;
+  if (options?.symbols?.length) extra.symbols = options.symbols.join(",");
+  if (options?.limit !== undefined) extra.limit = String(options.limit);
+  if (options?.offset !== undefined) extra.offset = String(options.offset);
+
+  const { data } = await apiClient.get<ApiResponse<MarketSummariesResponse>>(
+    "/markets/summaries",
+    {
+      ...exchangeParams(extra),
+      timeout: 60_000,
+    },
   );
   return data.data;
 }
