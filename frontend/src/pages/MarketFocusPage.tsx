@@ -103,7 +103,9 @@ export default function MarketFocusPage() {
     let cancelled = false;
     setCandlesLoading(true);
 
-    getCandles(symbol, candleIntervalForRange(chartRange))
+    getCandles(symbol, candleIntervalForRange(chartRange), {
+      fullHistory: chartRange === "ALL",
+    })
       .then((data) => {
         if (!cancelled) {
           setCandles(data);

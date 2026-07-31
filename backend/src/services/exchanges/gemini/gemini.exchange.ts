@@ -1,7 +1,7 @@
 import { AppError } from "../../../types/api.js";
 import type { Candle, MarketTrade, OrderBook, Ticker } from "../../../types/market.js";
 import { normalizeSymbol } from "../../../utils/symbols.js";
-import type { Exchange } from "../types.js";
+import type { CandleFetchOptions, Exchange } from "../types.js";
 import { GeminiClient } from "./gemini.client.js";
 import {
   mapGeminiCandles,
@@ -18,7 +18,7 @@ import type {
   GeminiTradeResponse,
 } from "./gemini.types.js";
 
-/** Cap Gemini's large candle payloads to a usable recent window. */
+/** Cap Gemini's large candle payloads to a usable recent window (default). */
 const CANDLE_LOOKBACK_MS: Record<string, number> = {
   "1m": 1000 * 60 * 60 * 24,
   "5m": 1000 * 60 * 60 * 24 * 7,
@@ -64,15 +64,23 @@ export class GeminiExchange implements Exchange {
     return mapGeminiTrades(symbol, data);
   }
 
-  async getCandles(symbol: string, interval: string): Promise<Candle[]> {
+  async getCandles(
+    symbol: string,
+    interval: string,
+    options?: CandleFetchOptions,
+  ): Promise<Candle[]> {
     const geminiSymbol = this.toExchangeSymbol(symbol);
     const timeframe = this.toGeminiTimeframe(interval);
     const data = await this.client.get<GeminiCandleResponse[]>(
       `/v2/candles/${geminiSymbol}/${timeframe}`,
     );
     const candles = mapGeminiCandles(symbol, data);
+    if (options?.fullHistory || candles.length === 0) {
+      return candles;
+    }
+
     const lookbackMs = CANDLE_LOOKBACK_MS[timeframe];
-    if (!lookbackMs || candles.length === 0) {
+    if (!lookbackMs) {
       return candles;
     }
 
@@ -105,7 +113,11 @@ export class GeminiExchange implements Exchange {
 
     const timeframe = mapping[interval.toLowerCase()];
     if (!timeframe) {
-      throw new AppError(`Unsupported candle interval: ${interval}`, 400, "INVALID_INTERVAL");
+      throw new AppError(
+        `Unsupported candle interval: ${interval}`,
+        400,
+        "INVALID_INTERVAL",
+      );
     }
 
     return timeframe;

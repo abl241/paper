@@ -111,12 +111,34 @@ export class MarketService {
     return this.resolveExchange(exchange).getTrades(symbol);
   }
 
-  getCandles(
+  async getCandles(
     symbol: string,
     interval: string,
     exchange?: string | ExchangeName,
+    options?: { fullHistory?: boolean },
   ): Promise<Candle[]> {
-    return this.resolveExchange(exchange).getCandles(symbol, interval);
+    const preferred = this.resolveExchange(exchange);
+    const normalized = interval.toLowerCase();
+    const isDaily = normalized === "1d" || normalized === "1day";
+
+    // Gemini's public daily candle endpoint only returns ~1 year of bars.
+    // For Focus "All", pull deep history from Coinbase (paginated) when possible.
+    if (options?.fullHistory && isDaily) {
+      try {
+        const deep = await this.resolveExchange("coinbase").getCandles(
+          symbol,
+          "1d",
+          { fullHistory: true },
+        );
+        if (deep.length > 0) {
+          return deep;
+        }
+      } catch {
+        // Fall back to the preferred exchange below.
+      }
+    }
+
+    return preferred.getCandles(symbol, interval, options);
   }
 
   async getSummaries(options: GetSummariesOptions = {}): Promise<{
