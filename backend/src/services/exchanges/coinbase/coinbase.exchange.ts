@@ -29,7 +29,7 @@ const CANDLE_LOOKBACK_SECONDS: Record<string, number> = {
   ONE_DAY: 60 * 60 * 24 * 730,
 };
 
-/** Seconds per candle for paging full history. */
+/** Seconds per candle for paging. */
 const GRANULARITY_SECONDS: Record<string, number> = {
   ONE_MINUTE: 60,
   FIVE_MINUTE: 60 * 5,
@@ -39,9 +39,12 @@ const GRANULARITY_SECONDS: Record<string, number> = {
   ONE_DAY: 60 * 60 * 24,
 };
 
-/** Coinbase returns at most ~350 candles per request; stay under that. */
+/**
+ * Coinbase rejects requests that would return ≥350 candles.
+ * Stay under that limit per page.
+ */
 const PAGE_CANDLES = 300;
-/** Cap how far back we walk (~15y of daily bars). */
+/** Cap how far back we walk for fullHistory (~15y of daily bars). */
 const MAX_FULL_HISTORY_SECONDS = 60 * 60 * 24 * 365 * 15;
 const MAX_PAGES = 40;
 
@@ -124,29 +127,40 @@ export class CoinbaseExchange implements Exchange {
     const productId = this.toExchangeSymbol(symbol);
     const granularity = this.toCoinbaseGranularity(interval);
     const end = Math.floor(Date.now() / 1000);
+    const grainSeconds = GRANULARITY_SECONDS[granularity] ?? 60 * 60 * 24;
 
     if (options?.fullHistory) {
-      return this.fetchFullHistoryCandles(symbol, productId, granularity, end);
+      return this.fetchCandlesPaged(
+        symbol,
+        productId,
+        granularity,
+        end,
+        end - MAX_FULL_HISTORY_SECONDS,
+      );
     }
 
-    const start = end - (CANDLE_LOOKBACK_SECONDS[granularity] ?? 60 * 60 * 48);
+    // Coinbase rejects spans that would return ≥350 candles. Cap the
+    // default lookback to one safe page (still covers Focus 1D–3M ranges).
+    const desired =
+      CANDLE_LOOKBACK_SECONDS[granularity] ?? 60 * 60 * 48;
+    const lookback = Math.min(desired, PAGE_CANDLES * grainSeconds);
     const data = await this.client.get<CoinbaseCandlesResponse>(
       `/api/v3/brokerage/market/products/${encodeURIComponent(productId)}/candles`,
-      { start, end, granularity },
+      { start: end - lookback, end, granularity },
     );
 
     return mapCoinbaseCandles(symbol, data.candles ?? []);
   }
 
-  private async fetchFullHistoryCandles(
+  private async fetchCandlesPaged(
     symbol: string,
     productId: string,
     granularity: string,
     endUnix: number,
+    earliest: number,
   ): Promise<Candle[]> {
     const step =
       (GRANULARITY_SECONDS[granularity] ?? 60 * 60 * 24) * PAGE_CANDLES;
-    const earliest = endUnix - MAX_FULL_HISTORY_SECONDS;
     const byTime = new Map<number, Candle>();
 
     let windowEnd = endUnix;
