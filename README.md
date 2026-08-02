@@ -32,11 +32,11 @@ Paper is organized around the main nav tabs. Each one is a stage in the paper-tr
 Landing overview of the product: what Paper is, how the loop works (watch → trade → build → backtest), and quick links into the main workspaces.
 
 ### Markets
-Browse live crypto markets from Gemini or Coinbase.
-- Symbol search and watchlists
-- Live tickers with bid/ask and volume
-- Focused symbol view with candlestick charts (TradingView Lightweight Charts)
-- Real-time trade prints over WebSocket
+Scan and discover live crypto markets from Gemini or Coinbase.
+- Movers strip (gainers, losers, volume) plus tabs for Watchlist, Holdings, Gainers, Losers, Top, and Browse
+- Sortable table with last, bid/ask, 24h % / $ change, volume, and sparklines
+- Live ticker flashes over WebSocket; holdings highlighted from the active portfolio
+- Focused symbol view with candlestick charts (TradingView Lightweight Charts) and trade prints
 
 ### Portfolio
 Paper trading desk for one or more isolated portfolios (cash, positions, and history per portfolio). Sub-tabs:
