@@ -243,6 +243,19 @@
   text-decoration: underline;
 }
 
+.runLog {
+  margin: 0;
+  padding: 0.9rem 1rem;
+  max-height: 18rem;
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: #334155;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .allocation {
   display: flex;
   flex-direction: column;

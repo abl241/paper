@@ -14,6 +14,7 @@ import OverviewSection from "./pages/portfolio/OverviewSection";
 import PerformanceSection from "./pages/portfolio/PerformanceSection";
 import PortfolioLayout from "./pages/portfolio/PortfolioLayout";
 import SettingsSection from "./pages/portfolio/SettingsSection";
+import StrategiesSection from "./pages/portfolio/StrategiesSection";
 import TradeSection from "./pages/portfolio/TradeSection";
 import StrategyLabPage from "./pages/strategy-lab/StrategyLabPage";
 import ResearchPage from "./pages/research/ResearchPage";
@@ -45,6 +46,7 @@ export default function App() {
         >
           <Route index element={<OverviewSection />} />
           <Route path="trade" element={<TradeSection />} />
+          <Route path="strategies" element={<StrategiesSection />} />
           <Route path="history" element={<HistorySection />} />
           <Route path="performance" element={<PerformanceSection />} />
           <Route path="settings" element={<SettingsSection />} />

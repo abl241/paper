@@ -8,6 +8,7 @@ import styles from "./PortfolioHub.module.css";
 const SECTIONS = [
   { path: "", label: "Overview" },
   { path: "trade", label: "Trade" },
+  { path: "strategies", label: "Strategies" },
   { path: "history", label: "History" },
   { path: "performance", label: "Performance" },
   { path: "settings", label: "Settings" },

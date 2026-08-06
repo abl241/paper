@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import { portfolioService } from "../services/portfolio/portfolio.service.js";
+import { liveRunnerService } from "../services/strategy/liveRunner.service.js";
 import { tradingService } from "../services/trading/trading.service.js";
 import { AppError } from "../types/api.js";
 import { getRouteParam } from "../utils/params.js";
@@ -204,6 +205,75 @@ export async function executeSell(
       req.body,
     );
     res.status(201).json({ data });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getStrategyRun(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const userId = requireUser(req);
+    const data = await liveRunnerService.getActive(
+      userId,
+      getRouteParam(req, "id"),
+    );
+    res.status(200).json({ data });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function startStrategyRun(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const userId = requireUser(req);
+    const data = await liveRunnerService.start(
+      userId,
+      getRouteParam(req, "id"),
+      req.body,
+    );
+    res.status(201).json({ data });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function stopStrategyRun(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const userId = requireUser(req);
+    const data = await liveRunnerService.stop(
+      userId,
+      getRouteParam(req, "id"),
+    );
+    res.status(200).json({ data });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function heartbeatStrategyRun(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const userId = requireUser(req);
+    const data = await liveRunnerService.heartbeat(
+      userId,
+      getRouteParam(req, "id"),
+    );
+    res.status(200).json({ data });
   } catch (error) {
     next(error);
   }

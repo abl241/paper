@@ -37,6 +37,7 @@ Scan and discover live crypto markets from Gemini or Coinbase.
 - Sortable table with last, bid/ask, 24h % / $ change, volume, and sparklines
 - Live ticker flashes over WebSocket; holdings highlighted from the active portfolio
 - Focused symbol view with candlestick charts (TradingView Lightweight Charts) and trade prints
+- Focused view also jumps straight to Trade or **Run strategy** on that market for the active portfolio
 
 ### Portfolio
 Paper trading desk for one or more isolated portfolios (cash, positions, and history per portfolio). Sub-tabs:
@@ -45,6 +46,7 @@ Paper trading desk for one or more isolated portfolios (cash, positions, and his
 |-----|----------------|
 | **Overview** | Equity, cash, open positions, and a high-level snapshot of the book |
 | **Trade** | Place simulated market buys/sells filled at live ask/bid |
+| **Strategies** | Run one saved Lab strategy on live candles for this book — paper fills land in the portfolio |
 | **History** | Full fill / trade log for the selected portfolio |
 | **Performance** | Equity curve and performance view over time |
 | **Settings** | Portfolio-level options (e.g. name, exchange preference, cash deposits / withdrawals / reset) |
@@ -62,6 +64,13 @@ Backtest saved Lab strategies on historical candles using the same Strategy API.
 - Pick strategy, symbol, range, and timeframe
 - Run backtests and inspect equity / results
 - Jump in from Strategy Lab with a strategy pre-selected
+- For live-market runs against a real book, use the portfolio **Strategies** tab
+
+### Live paper runs
+The portfolio Strategies tab arms one strategy per portfolio and evaluates it on closed candles, filling through the same transactional paper-trading path as manual orders.
+- **Presence-gated** — the backend only polls candles while the tab is open and sending heartbeats, so an idle session costs zero exchange calls
+- **Catch-up on return** — when you come back, closed bars missed while away are replayed in order before live evaluation resumes
+- Run state (armed strategy, last processed bar, log, last error) persists across sessions until you stop it
 
 ### Settings
 Account-wide preferences: preferred exchange, price refresh interval, equity chart defaults (range, resolution, y-axis), and clock format.
@@ -146,16 +155,16 @@ Migrations apply automatically when the backend starts.
 A few intentional choices:
 
 1. **Domain over venue** — symbols and tickers are normalized in-app; mappers live at the exchange edge.
-2. **Portfolios own state** — cash, positions, and trades hang off `portfolio_id`, so strategies stay isolated.
+2. **Portfolios own state** — cash, positions, and trades hang off `portfolio_id`, so strategies stay isolated. Live paper runs attach one strategy per portfolio and fill through the same book.
 3. **Paper ≠ toy** — fills still use bid/ask, validate quantity, and reject insufficient cash or size.
 4. **Cheap streams** — reference-counted upstream subscriptions keep the wire quiet when nobody is watching.
-5. **Strategy API sandbox** — Lab strategies talk only to `StrategyContext` (no imports/`fetch`); Research reuses that surface for backtests.
+5. **Strategy API sandbox** — Lab strategies talk only to `StrategyContext` (no imports/`fetch`); Research and live paper runs reuse that same surface.
 
 ---
 
 ## Status
 
-Active personal project. The core loop — live data → paper trade → portfolio — works. Strategy Lab and Research cover authoring and backtesting. Ongoing work: UX polish, broader exchange coverage, richer performance analytics, live paper strategy runners.
+Active personal project. The core loop — live data → paper trade → portfolio — works. Strategy Lab and Research cover authoring and backtesting; portfolio Strategies runs live paper (presence + catch-up). Ongoing work: UX polish, broader exchange coverage, richer performance analytics.
 
 ---
 

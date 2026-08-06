@@ -1,10 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSettings } from "../contexts/SettingsContext";
-import type {
-  ConnectionState,
-  ServerMessage,
-  TickerUpdate,
-} from "../types/websocket";
+import type { ConnectionState, ServerMessage } from "../types/websocket";
 import { getWebSocketUrl } from "../utils/ws";
 
 const MAX_LIVE_SYMBOLS = 15;

@@ -20,6 +20,7 @@ import {
   StarIcon,
   TradeIcon,
 } from "../components/icons";
+import { useActivePortfolio } from "../contexts/ActivePortfolioContext";
 import { useAuth } from "../contexts/AuthContext";
 import { useSettings } from "../contexts/SettingsContext";
 import { useMarketStream } from "../hooks/useMarketStream";
@@ -39,6 +40,8 @@ export default function MarketFocusPage() {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
   const { exchange, clockFormat } = useSettings();
+  const { activePortfolioId, isLoading: portfoliosLoading } =
+    useActivePortfolio();
   const goTrade = useTradeNavigation();
 
   const symbol = useMemo(() => {
@@ -224,6 +227,24 @@ export default function MarketFocusPage() {
             >
               <StarIcon filled={inWatchlist} />
               {inWatchlist ? "Watching" : "Watch"}
+            </button>
+          )}
+
+          {isAuthenticated && (
+            <button
+              type="button"
+              className={styles.strategyLink}
+              disabled={portfoliosLoading || !activePortfolioId}
+              onClick={() => {
+                if (activePortfolioId) {
+                  navigate(
+                    `/portfolio/${activePortfolioId}/strategies?symbol=${encodeURIComponent(symbol)}`,
+                  );
+                }
+              }}
+            >
+              <ChartIcon />
+              Run strategy
             </button>
           )}
 

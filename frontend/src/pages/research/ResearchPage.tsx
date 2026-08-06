@@ -158,7 +158,8 @@ export default function ResearchPage() {
         <div>
           <h1 className={styles.title}>Research</h1>
           <p className={styles.subtitle}>
-            Backtest strategies on historical candles. Live paper runs come later.
+            Backtest strategies on historical candles. For live paper fills on
+            this book, use the portfolio Strategies tab.
           </p>
         </div>
         <Link className={styles.link} to="/strategy-lab">

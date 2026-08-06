@@ -12,6 +12,7 @@
 
 .backButton,
 .watchButton,
+.strategyLink,
 .tradeLink {
   display: inline-flex;
   align-items: center;
@@ -65,6 +66,21 @@
 .watchButton:hover:not(:disabled) {
   background: #fffbeb;
   color: #b45309;
+}
+
+.strategyLink {
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.strategyLink:hover:not(:disabled) {
+  background: #dbeafe;
+}
+
+.strategyLink:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .tradeLink {

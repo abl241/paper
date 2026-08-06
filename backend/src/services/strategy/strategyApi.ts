@@ -1,6 +1,6 @@
 /**
  * Controlled Strategy API — strategies talk only to this surface.
- * Shared conceptually with Research (backtest / live paper) later.
+ * Shared conceptually with Research (backtest) and portfolio live paper runs.
  */
 
 export const STRATEGY_API_DTS = `

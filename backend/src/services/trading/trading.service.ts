@@ -12,6 +12,7 @@ import {
 import { insertTrade } from "../../models/trade.model.js";
 import { AppError } from "../../types/api.js";
 import type {
+  ExecuteOrderAtPriceInput,
   ExecuteOrderInput,
   TradeExecutionResult,
 } from "../../types/trading.js";
@@ -37,11 +38,28 @@ export class TradingService {
     return this.executeOrder(userId, portfolioId, input, "sell");
   }
 
+  async executeBuyAtPrice(
+    userId: string,
+    portfolioId: string,
+    input: ExecuteOrderAtPriceInput,
+  ): Promise<TradeExecutionResult> {
+    return this.executeOrder(userId, portfolioId, input, "buy", input.price);
+  }
+
+  async executeSellAtPrice(
+    userId: string,
+    portfolioId: string,
+    input: ExecuteOrderAtPriceInput,
+  ): Promise<TradeExecutionResult> {
+    return this.executeOrder(userId, portfolioId, input, "sell", input.price);
+  }
+
   private async executeOrder(
     userId: string,
     portfolioId: string,
     input: ExecuteOrderInput,
     side: "buy" | "sell",
+    priceOverride?: number,
   ): Promise<TradeExecutionResult> {
     const symbol = this.parseSymbol(input.symbol);
     const quantity = this.parseQuantity(input.quantity);
@@ -50,12 +68,25 @@ export class TradingService {
       userId,
       portfolioId,
     );
-    const exchange = await portfolioService.resolveExchange(userId, portfolio);
-    const ticker = await marketService.getTicker(symbol, exchange);
-    const executionPrice =
-      side === "buy"
-        ? roundAmount(ticker.ask || ticker.last)
-        : roundAmount(ticker.bid || ticker.last);
+
+    let executionPrice: number;
+    if (priceOverride !== undefined) {
+      if (!Number.isFinite(priceOverride) || priceOverride <= 0) {
+        throw new AppError(
+          "Execution price must be greater than zero",
+          400,
+          "INVALID_PRICE",
+        );
+      }
+      executionPrice = roundAmount(priceOverride);
+    } else {
+      const exchange = await portfolioService.resolveExchange(userId, portfolio);
+      const ticker = await marketService.getTicker(symbol, exchange);
+      executionPrice =
+        side === "buy"
+          ? roundAmount(ticker.ask || ticker.last)
+          : roundAmount(ticker.bid || ticker.last);
+    }
 
     const client = await pool.connect();
 
