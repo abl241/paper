@@ -6,8 +6,11 @@ import type {
   ServerMessage,
   TickerUpdate,
 } from "../types/websocket";
+import {
+  connectMarketWebSocket,
+  restStaleMs,
+} from "../utils/marketStreamConnection";
 import { restPollIntervalMs } from "../utils/restPollInterval";
-import { getWebSocketUrl } from "../utils/ws";
 
 interface LiveMarketState {
   connectionState: ConnectionState;
@@ -47,6 +50,26 @@ export function useMarketStream(symbol: string | undefined): LiveMarketState {
     if (exchange !== "gemini") {
       let cancelled = false;
       const pollMs = restPollIntervalMs(priceRefreshMs);
+      let lastSuccessAt = 0;
+      let staleTimer: ReturnType<typeof setTimeout> | null = null;
+
+      const clearStaleTimer = () => {
+        if (staleTimer) {
+          clearTimeout(staleTimer);
+          staleTimer = null;
+        }
+      };
+
+      const scheduleStaleCheck = () => {
+        clearStaleTimer();
+        staleTimer = setTimeout(() => {
+          if (cancelled) {
+            return;
+          }
+          console.warn("[market-rest] stale — no successful polls");
+          setConnectionState("stale");
+        }, restStaleMs(pollMs));
+      };
 
       const poll = async () => {
         try {
@@ -64,10 +87,15 @@ export function useMarketStream(symbol: string | undefined): LiveMarketState {
           };
           latestTickerRef.current = update;
           setTickerUpdate(update);
+          lastSuccessAt = Date.now();
           setConnectionState("connected");
+          scheduleStaleCheck();
         } catch {
           if (!cancelled) {
-            setConnectionState("disconnected");
+            const staleFor = Date.now() - lastSuccessAt;
+            if (lastSuccessAt === 0 || staleFor >= restStaleMs(pollMs)) {
+              setConnectionState("disconnected");
+            }
           }
         }
       };
@@ -77,6 +105,7 @@ export function useMarketStream(symbol: string | undefined): LiveMarketState {
 
       return () => {
         cancelled = true;
+        clearStaleTimer();
         window.clearInterval(timer);
       };
     }
@@ -111,49 +140,28 @@ export function useMarketStream(symbol: string | undefined): LiveMarketState {
       flushTimerRef.current = setTimeout(flush, priceRefreshMs - elapsed);
     };
 
-    const ws = new WebSocket(getWebSocketUrl());
+    const handle = connectMarketWebSocket({
+      symbols: [symbol],
+      onStateChange: setConnectionState,
+      onMessage: (message: ServerMessage) => {
+        if (message.type === "ticker" && message.data.symbol === symbol) {
+          latestTickerRef.current = message.data;
+          scheduleFlush();
+        }
 
-    ws.onopen = () => {
-      setConnectionState("connected");
-      ws.send(JSON.stringify({ type: "subscribe", symbol }));
-    };
-
-    ws.onmessage = (event) => {
-      let message: ServerMessage;
-      try {
-        message = JSON.parse(String(event.data)) as ServerMessage;
-      } catch {
-        return;
-      }
-
-      if (message.type === "ticker" && message.data.symbol === symbol) {
-        latestTickerRef.current = message.data;
-        scheduleFlush();
-      }
-
-      if (message.type === "trade" && message.data.symbol === symbol) {
-        latestTradeRef.current = message.data.price;
-        scheduleFlush();
-      }
-    };
-
-    ws.onclose = () => {
-      setConnectionState("disconnected");
-    };
-
-    ws.onerror = () => {
-      setConnectionState("disconnected");
-    };
+        if (message.type === "trade" && message.data.symbol === symbol) {
+          latestTradeRef.current = message.data.price;
+          scheduleFlush();
+        }
+      },
+    });
 
     return () => {
       if (flushTimerRef.current) {
         clearTimeout(flushTimerRef.current);
         flushTimerRef.current = null;
       }
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: "unsubscribe", symbol }));
-      }
-      ws.close();
+      handle.close();
     };
   }, [symbol, priceRefreshMs, exchange]);
 

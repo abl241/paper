@@ -26,4 +26,8 @@ export type ClientMessage =
   | { type: "subscribe"; symbol: string }
   | { type: "unsubscribe"; symbol: string };
 
-export type ConnectionState = "connecting" | "connected" | "disconnected";
+export type ConnectionState =
+  | "connecting"
+  | "connected"
+  | "disconnected"
+  | "stale";

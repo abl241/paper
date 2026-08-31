@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import { createApp } from "./app.js";
 import { config } from "./config/index.js";
 import { closePool, verifyDatabaseConnection } from "./config/database.js";
+import { logger } from "./utils/logger.js";
 import { runMigrations } from "./db/migrate.js";
 import {
   attachWebSocketServer,
@@ -10,7 +11,7 @@ import {
 
 async function start(): Promise<void> {
   await verifyDatabaseConnection();
-  console.log("[database] connected");
+  logger.info("database", "connected");
 
   await runMigrations();
 
@@ -19,12 +20,11 @@ async function start(): Promise<void> {
   const wss = attachWebSocketServer(server);
 
   server.listen(config.port, () => {
-    console.log(`[backend] listening on http://localhost:${config.port}`);
-    console.log(`[backend] environment: ${config.nodeEnv}`);
+    logger.info("backend", "listening", { port: config.port, env: config.nodeEnv });
   });
 
   const shutdown = async (signal: string) => {
-    console.log(`[backend] received ${signal}, shutting down`);
+    logger.info("backend", `received ${signal}, shutting down`);
     await shutdownWebSocketServer(wss);
     server.close();
     await closePool();
@@ -36,6 +36,6 @@ async function start(): Promise<void> {
 }
 
 start().catch((err) => {
-  console.error("[backend] failed to start:", err);
+  logger.error("backend", "failed to start", err);
   process.exit(1);
 });

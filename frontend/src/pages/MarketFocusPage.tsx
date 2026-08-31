@@ -217,9 +217,11 @@ export default function MarketFocusPage() {
           >
             {connectionState === "connected"
               ? "Live"
-              : connectionState === "connecting"
-                ? "Connecting"
-                : "Offline"}
+              : connectionState === "stale"
+                ? "Stale"
+                : connectionState === "connecting"
+                  ? "Connecting"
+                  : "Offline"}
           </span>
 
           {isAuthenticated && (

@@ -1,5 +1,6 @@
 import { EventEmitter } from "node:events";
 import WebSocket from "ws";
+import { logger } from "../../../utils/logger.js";
 import {
   isGeminiBookTickerMessage,
   isGeminiTradeStreamMessage,
@@ -10,22 +11,27 @@ import {
 export interface GeminiWsClientOptions {
   url: string;
   reconnectDelayMs?: number;
+  staleMs?: number;
 }
+
+const DEFAULT_STALE_MS = 30_000;
 
 export class GeminiWsClient extends EventEmitter {
   private readonly url: string;
   private readonly reconnectDelayMs: number;
+  private readonly staleMs: number;
   private ws: WebSocket | null = null;
   private readonly subscriptions = new Set<string>();
   private requestId = 1;
   private reconnectTimer: NodeJS.Timeout | undefined;
+  private staleTimer: NodeJS.Timeout | undefined;
   private shouldReconnect = true;
 
   constructor(options: GeminiWsClientOptions) {
     super();
     this.url = options.url;
     this.reconnectDelayMs = options.reconnectDelayMs ?? 2_000;
-    // Node treats unhandled "error" emits as fatal — log only, never crash the API.
+    this.staleMs = options.staleMs ?? DEFAULT_STALE_MS;
     this.on("error", () => {});
   }
 
@@ -37,26 +43,29 @@ export class GeminiWsClient extends EventEmitter {
     this.ws = new WebSocket(this.url);
 
     this.ws.on("open", () => {
-      console.log("[gemini-ws] connected");
+      logger.info("gemini-ws", "connected");
       this.emit("connected");
 
       if (this.subscriptions.size > 0) {
         this.sendSubscribe([...this.subscriptions]);
       }
+      this.scheduleStaleCheck();
     });
 
     this.ws.on("message", (data) => {
+      this.touchActivity();
       this.handleMessage(data.toString());
     });
 
     this.ws.on("close", () => {
-      console.log("[gemini-ws] disconnected");
+      this.clearStaleTimer();
+      logger.info("gemini-ws", "disconnected");
       this.emit("disconnected");
       this.scheduleReconnect();
     });
 
     this.ws.on("error", (error) => {
-      console.error("[gemini-ws] error:", error.message);
+      logger.error("gemini-ws", "socket error", error);
       this.emit("error", error);
     });
   }
@@ -70,6 +79,7 @@ export class GeminiWsClient extends EventEmitter {
     }
 
     this.sendSubscribe(newStreams);
+    this.scheduleStaleCheck();
   }
 
   unsubscribe(streams: string[]): void {
@@ -81,10 +91,14 @@ export class GeminiWsClient extends EventEmitter {
     }
 
     this.sendUnsubscribe(removedStreams);
+    if (this.subscriptions.size === 0) {
+      this.clearStaleTimer();
+    }
   }
 
   close(): void {
     this.shouldReconnect = false;
+    this.clearStaleTimer();
 
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
@@ -104,6 +118,32 @@ export class GeminiWsClient extends EventEmitter {
       this.reconnectTimer = undefined;
       this.connect();
     }, this.reconnectDelayMs);
+  }
+
+  private scheduleStaleCheck(): void {
+    this.clearStaleTimer();
+    if (this.subscriptions.size === 0) {
+      return;
+    }
+
+    this.staleTimer = setTimeout(() => {
+      logger.warn("gemini-ws", "stale connection — forcing reconnect", {
+        subscriptions: this.subscriptions.size,
+      });
+      this.emit("stale");
+      this.ws?.close();
+    }, this.staleMs);
+  }
+
+  private touchActivity(): void {
+    this.scheduleStaleCheck();
+  }
+
+  private clearStaleTimer(): void {
+    if (this.staleTimer) {
+      clearTimeout(this.staleTimer);
+      this.staleTimer = undefined;
+    }
   }
 
   private sendSubscribe(streams: string[]): void {
@@ -135,13 +175,16 @@ export class GeminiWsClient extends EventEmitter {
     try {
       message = JSON.parse(raw) as GeminiStreamMessage;
     } catch {
-      console.warn("[gemini-ws] failed to parse message");
+      logger.warn("gemini-ws", "failed to parse message");
       return;
     }
 
     if (isGeminiWsResponse(message)) {
       if (message.error) {
-        console.error("[gemini-ws] subscription error:", message.error.msg);
+        logger.error("gemini-ws", "subscription error", undefined, {
+          code: message.error.code,
+          msg: message.error.msg,
+        });
       }
       return;
     }

@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
-import { AppError } from "../types/api.js";
 import { config } from "../config/index.js";
+import { logger } from "../utils/logger.js";
+import { AppError } from "../types/api.js";
 
 export function errorHandler(
   err: unknown,
@@ -18,7 +19,7 @@ export function errorHandler(
     return;
   }
 
-  console.error("[error]", err);
+  logger.error("http", "unhandled error", err);
 
   res.status(500).json({
     error: {

@@ -20,6 +20,12 @@ import { roundAmount, roundUsd } from "../../utils/decimal.js";
 import { normalizeSymbol } from "../../utils/symbols.js";
 import { marketService } from "../market/market.service.js";
 import { portfolioService } from "../portfolio/portfolio.service.js";
+import {
+  computeBuyFill,
+  computeSellFill,
+  hasSufficientCash,
+  hasSufficientPosition,
+} from "./portfolioMath.js";
 
 export class TradingService {
   async executeBuy(
@@ -145,7 +151,7 @@ export class TradingService {
   ): Promise<TradeExecutionResult> {
     const totalCost = roundUsd(input.quantity * input.executionPrice);
 
-    if (totalCost > input.cashBalance) {
+    if (!hasSufficientCash(input.cashBalance, totalCost)) {
       throw new AppError("Insufficient cash balance", 400, "INSUFFICIENT_FUNDS");
     }
 
@@ -155,28 +161,29 @@ export class TradingService {
       input.symbol,
     );
 
-    const newQuantity = roundAmount(
-      (existingPosition?.quantity ?? 0) + input.quantity,
-    );
-    const newAverageCost = existingPosition
-      ? roundAmount(
-          (existingPosition.quantity * existingPosition.averageCost +
-            totalCost) /
-            newQuantity,
-        )
-      : roundAmount(input.executionPrice);
+    const fill = computeBuyFill({
+      cashBalance: input.cashBalance,
+      quantity: input.quantity,
+      executionPrice: input.executionPrice,
+      existingPosition: existingPosition
+        ? {
+            quantity: existingPosition.quantity,
+            averageCost: existingPosition.averageCost,
+          }
+        : null,
+    });
 
     await upsertPosition(client, {
       portfolioId: input.portfolioId,
       symbol: input.symbol,
-      quantity: newQuantity,
-      averageCost: newAverageCost,
+      quantity: fill.quantity,
+      averageCost: fill.averageCost,
     });
 
     const updated = await updatePortfolioCash(
       client,
       input.portfolioId,
-      roundUsd(input.cashBalance - totalCost),
+      fill.cashBalance,
     );
 
     const trade = await insertTrade(client, {
@@ -209,7 +216,7 @@ export class TradingService {
       input.symbol,
     );
 
-    if (!position || position.quantity < input.quantity) {
+    if (!hasSufficientPosition(position, input.quantity)) {
       throw new AppError(
         "Insufficient position quantity",
         400,
@@ -217,20 +224,23 @@ export class TradingService {
       );
     }
 
-    const proceeds = roundUsd(input.quantity * input.executionPrice);
-    const realizedPnL = roundUsd(
-      (input.executionPrice - position.averageCost) * input.quantity,
-    );
+    const fill = computeSellFill({
+      cashBalance: input.cashBalance,
+      quantity: input.quantity,
+      executionPrice: input.executionPrice,
+      position: {
+        quantity: position.quantity,
+        averageCost: position.averageCost,
+      },
+    });
 
-    const remainingQuantity = roundAmount(position.quantity - input.quantity);
-
-    if (remainingQuantity <= 0) {
+    if (fill.shouldDeletePosition) {
       await deletePosition(client, input.portfolioId, input.symbol);
     } else {
       await upsertPosition(client, {
         portfolioId: input.portfolioId,
         symbol: input.symbol,
-        quantity: remainingQuantity,
+        quantity: fill.remainingQuantity,
         averageCost: position.averageCost,
       });
     }
@@ -238,7 +248,7 @@ export class TradingService {
     const updated = await updatePortfolioCash(
       client,
       input.portfolioId,
-      roundUsd(input.cashBalance + proceeds),
+      fill.cashBalance,
     );
 
     const trade = await insertTrade(client, {
@@ -247,7 +257,7 @@ export class TradingService {
       side: "sell",
       quantity: input.quantity,
       executionPrice: input.executionPrice,
-      realizedPnL,
+      realizedPnL: fill.realizedPnL,
       strategyRunId: input.strategyRunId ?? null,
     });
 

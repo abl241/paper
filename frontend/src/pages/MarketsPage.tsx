@@ -493,7 +493,8 @@ export default function MarketsPage() {
   }, [moversUniverse]);
 
   const pageCount = Math.max(1, Math.ceil(browseTotal / BROWSE_PAGE_SIZE));
-  const isLive = connectionState === "connected";
+  const isLive =
+    connectionState === "connected" || connectionState === "stale";
 
   function sortLabel(key: SortKey, label: string) {
     const active = sortKey === key;

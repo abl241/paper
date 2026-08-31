@@ -1,4 +1,5 @@
 import WebSocket from "ws";
+import { logger } from "../utils/logger.js";
 import { config } from "../config/index.js";
 import { GeminiWsClient } from "../services/exchanges/gemini/gemini.ws.client.js";
 import {
@@ -31,7 +32,7 @@ export class MarketStreamService {
     });
 
     this.geminiWs.on("error", (error: Error) => {
-      console.error("[market-stream] gemini ws error:", error.message);
+      logger.error("market-stream", "gemini ws error", error);
     });
 
     this.geminiWs.connect();
