@@ -1,5 +1,6 @@
 import axios from "axios";
 import { clearStoredToken, getStoredToken } from "../utils/token";
+import { ApiError } from "../types/auth";
 
 const baseURL =
   import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3001";
@@ -28,11 +29,14 @@ apiClient.interceptors.response.use(
         clearStoredToken();
       }
 
+      const body = error.response?.data as
+        | { error?: { message?: string; code?: string } }
+        | undefined;
       const message =
-        error.response?.data?.error?.message ??
-        error.message ??
-        "Request failed";
-      return Promise.reject(new Error(message));
+        body?.error?.message ?? error.message ?? "Request failed";
+      return Promise.reject(
+        new ApiError(message, body?.error?.code, error.response?.status),
+      );
     }
 
     return Promise.reject(

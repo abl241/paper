@@ -27,6 +27,7 @@ function toPublicUser(user: User): PublicUser {
     id: user.id,
     username: user.username,
     email: user.email,
+    emailVerified: user.emailVerified,
     createdAt: user.createdAt.toISOString(),
   };
 }

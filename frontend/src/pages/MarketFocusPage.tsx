@@ -215,7 +215,11 @@ export default function MarketFocusPage() {
                 : styles.liveBadge
             }
           >
-            {connectionState === "connected" ? "Live" : "Connecting"}
+            {connectionState === "connected"
+              ? "Live"
+              : connectionState === "connecting"
+                ? "Connecting"
+                : "Offline"}
           </span>
 
           {isAuthenticated && (

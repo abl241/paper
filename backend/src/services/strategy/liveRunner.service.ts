@@ -8,12 +8,16 @@ import {
 } from "../../models/strategy-run.model.js";
 import { findStrategyForUser } from "../../models/strategy.model.js";
 import { findPositionsByPortfolioId } from "../../models/position.model.js";
+import { findTradesByStrategyRunId } from "../../models/trade.model.js";
 import { AppError } from "../../types/api.js";
+import type { Trade } from "../../types/portfolio.js";
 import type { PreferredExchange } from "../../types/settings.js";
 import type {
   StartStrategyRunInput,
   StrategyRunPresence,
   StrategyRunRecord,
+  StrategyRunStats,
+  StrategyRunTrade,
   StrategyRunView,
 } from "../../types/strategyRun.js";
 import { normalizeSymbol } from "../../utils/symbols.js";
@@ -42,7 +46,51 @@ const INTERVAL_SECONDS: Record<string, number> = {
   "1d": 86_400,
 };
 
-function toView(run: StrategyRunRecord): StrategyRunView {
+function emptyStats(): StrategyRunStats {
+  return {
+    tradeCount: 0,
+    buyCount: 0,
+    sellCount: 0,
+    realizedPnL: 0,
+    winRate: null,
+    closedTrades: 0,
+  };
+}
+
+function buildStats(trades: Trade[]): StrategyRunStats {
+  const buys = trades.filter((t) => t.side === "buy");
+  const sells = trades.filter((t) => t.side === "sell");
+  const closed = sells.filter((t) => t.realizedPnL != null);
+  const wins = closed.filter((t) => (t.realizedPnL ?? 0) > 0);
+  const realizedPnL = closed.reduce((sum, t) => sum + (t.realizedPnL ?? 0), 0);
+
+  return {
+    tradeCount: trades.length,
+    buyCount: buys.length,
+    sellCount: sells.length,
+    realizedPnL,
+    winRate: closed.length > 0 ? (wins.length / closed.length) * 100 : null,
+    closedTrades: closed.length,
+  };
+}
+
+function mapRunTrades(trades: Trade[]): StrategyRunTrade[] {
+  return trades.map((trade) => ({
+    id: trade.id,
+    symbol: trade.symbol,
+    side: trade.side,
+    quantity: trade.quantity,
+    executionPrice: trade.executionPrice,
+    realizedPnL: trade.realizedPnL,
+    executedAt:
+      trade.executedAt instanceof Date
+        ? trade.executedAt.toISOString()
+        : String(trade.executedAt),
+  }));
+}
+
+async function toView(run: StrategyRunRecord): Promise<StrategyRunView> {
+  const trades = await findTradesByStrategyRunId(run.id);
   return {
     id: run.id,
     portfolioId: run.portfolioId,
@@ -57,6 +105,8 @@ function toView(run: StrategyRunRecord): StrategyRunView {
     lastHeartbeatAt: run.lastHeartbeatAt?.toISOString() ?? null,
     lastError: run.lastError,
     logs: run.logs,
+    trades: mapRunTrades(trades),
+    stats: trades.length > 0 ? buildStats(trades) : emptyStats(),
     createdAt: run.createdAt.toISOString(),
     updatedAt: run.updatedAt.toISOString(),
   };
@@ -131,9 +181,9 @@ export class LiveRunnerService {
       allowArchived: true,
     });
     const running = await findRunningStrategyRun(portfolioId, userId);
-    if (running) return toView(running);
+    if (running) return await toView(running);
     const latest = await findLatestStrategyRun(portfolioId, userId);
-    return latest ? toView(latest) : null;
+    return latest ? await toView(latest) : null;
   }
 
   async start(
@@ -239,7 +289,7 @@ export class LiveRunnerService {
       logs,
     });
 
-    return toView(run);
+    return await toView(run);
   }
 
   async stop(
@@ -252,13 +302,13 @@ export class LiveRunnerService {
     const running = await findRunningStrategyRun(portfolioId, userId);
     if (!running) {
       const latest = await findLatestStrategyRun(portfolioId, userId);
-      return latest ? toView(latest) : null;
+      return latest ? await toView(latest) : null;
     }
 
     let logs = pushLog(running.logs, "Stopped by user");
     await updateStrategyRunState(running.id, userId, { logs });
     const stopped = await stopStrategyRun(running.id, userId);
-    return stopped ? toView(stopped) : null;
+    return stopped ? await toView(stopped) : null;
   }
 
   async heartbeat(
@@ -269,7 +319,7 @@ export class LiveRunnerService {
     const running = await findRunningStrategyRun(portfolioId, userId);
     if (!running) {
       const latest = await findLatestStrategyRun(portfolioId, userId);
-      return latest ? toView(latest) : null;
+      return latest ? await toView(latest) : null;
     }
 
     const updated = await updateStrategyRunState(running.id, userId, {
@@ -297,7 +347,7 @@ export class LiveRunnerService {
     }
 
     if (derivePresence(run) === "idle") {
-      return toView(run);
+      return await toView(run);
     }
 
     let logs = [...run.logs];
@@ -351,7 +401,7 @@ export class LiveRunnerService {
         const refreshed = await updateStrategyRunState(run.id, userId, {
           lastHeartbeatAt: new Date(),
         });
-        return toView(refreshed ?? run);
+        return await toView(refreshed ?? run);
       }
 
       if (closedIndexes.length > 1) {
@@ -377,6 +427,7 @@ export class LiveRunnerService {
           logs = await this.fillIntent({
             userId,
             portfolioId,
+            runId: run.id,
             symbol: run.symbol,
             pending: queue.pending,
             fillPrice,
@@ -403,6 +454,7 @@ export class LiveRunnerService {
           logs = await this.fillIntent({
             userId,
             portfolioId,
+            runId: run.id,
             symbol: run.symbol,
             pending: queue.pending,
             fillPrice: bar.close,
@@ -419,7 +471,7 @@ export class LiveRunnerService {
         lastError: null,
         logs,
       });
-      return toView(saved ?? run);
+      return await toView(saved ?? run);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Tick failed";
@@ -429,7 +481,7 @@ export class LiveRunnerService {
         lastError: message,
         logs,
       });
-      return toView(saved ?? run);
+      return await toView(saved ?? run);
     }
   }
 
@@ -508,6 +560,7 @@ export class LiveRunnerService {
   private async fillIntent(input: {
     userId: string;
     portfolioId: string;
+    runId: string;
     symbol: string;
     pending: { side: "buy" | "sell"; intent: OrderIntent };
     fillPrice: number;
@@ -536,6 +589,7 @@ export class LiveRunnerService {
           await tradingService.executeBuy(input.userId, input.portfolioId, {
             symbol: input.symbol,
             quantity: qty,
+            strategyRunId: input.runId,
           });
           return pushLog(
             logs,
@@ -546,6 +600,7 @@ export class LiveRunnerService {
           symbol: input.symbol,
           quantity: qty,
           price,
+          strategyRunId: input.runId,
         });
         return pushLog(
           logs,
@@ -567,6 +622,7 @@ export class LiveRunnerService {
         await tradingService.executeSell(input.userId, input.portfolioId, {
           symbol: input.symbol,
           quantity: qty,
+          strategyRunId: input.runId,
         });
         return pushLog(
           logs,
@@ -577,6 +633,7 @@ export class LiveRunnerService {
         symbol: input.symbol,
         quantity: qty,
         price,
+        strategyRunId: input.runId,
       });
       return pushLog(
         logs,

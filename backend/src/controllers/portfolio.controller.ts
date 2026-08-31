@@ -145,11 +145,21 @@ export async function getPortfolioTrades(
       typeof req.query.from === "string" ? new Date(req.query.from) : undefined;
     const to =
       typeof req.query.to === "string" ? new Date(req.query.to) : undefined;
+    const source =
+      req.query.source === "strategy" ||
+      req.query.source === "manual" ||
+      req.query.source === "all"
+        ? req.query.source
+        : undefined;
+    const strategyRunId =
+      typeof req.query.strategyRunId === "string"
+        ? req.query.strategyRunId
+        : undefined;
 
     const data = await portfolioService.getTrades(
       userId,
       getRouteParam(req, "id"),
-      { symbol, side, from, to },
+      { symbol, side, from, to, source, strategyRunId },
     );
     res.status(200).json({ data });
   } catch (error) {

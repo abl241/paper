@@ -12,7 +12,11 @@ interface TradeRow {
   execution_price: string;
   realized_pnl: string | null;
   executed_at: Date;
+  strategy_run_id: string | null;
 }
+
+const TRADE_SELECT = `id, portfolio_id, symbol, side, quantity, execution_price,
+  realized_pnl, executed_at, strategy_run_id`;
 
 function mapTrade(row: TradeRow): Trade {
   return {
@@ -25,6 +29,7 @@ function mapTrade(row: TradeRow): Trade {
     realizedPnL:
       row.realized_pnl === null ? null : parseDecimal(row.realized_pnl),
     executedAt: row.executed_at,
+    strategyRunId: row.strategy_run_id,
   };
 }
 
@@ -37,12 +42,15 @@ export async function insertTrade(
     quantity: number;
     executionPrice: number;
     realizedPnL: number | null;
+    strategyRunId?: string | null;
   },
 ): Promise<Trade> {
   const result = await client.query<TradeRow>(
-    `INSERT INTO trades (portfolio_id, symbol, side, quantity, execution_price, realized_pnl)
-     VALUES ($1, $2, $3, $4, $5, $6)
-     RETURNING id, portfolio_id, symbol, side, quantity, execution_price, realized_pnl, executed_at`,
+    `INSERT INTO trades (
+       portfolio_id, symbol, side, quantity, execution_price, realized_pnl, strategy_run_id
+     )
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     RETURNING ${TRADE_SELECT}`,
     [
       input.portfolioId,
       input.symbol,
@@ -50,6 +58,7 @@ export async function insertTrade(
       input.quantity,
       input.executionPrice,
       input.realizedPnL,
+      input.strategyRunId ?? null,
     ],
   );
 
@@ -79,9 +88,17 @@ export async function findTradesByPortfolioId(
     params.push(filters.to);
     clauses.push(`executed_at <= $${params.length}`);
   }
+  if (filters.strategyRunId) {
+    params.push(filters.strategyRunId);
+    clauses.push(`strategy_run_id = $${params.length}`);
+  } else if (filters.source === "strategy") {
+    clauses.push(`strategy_run_id IS NOT NULL`);
+  } else if (filters.source === "manual") {
+    clauses.push(`strategy_run_id IS NULL`);
+  }
 
   const result = await pool.query<TradeRow>(
-    `SELECT id, portfolio_id, symbol, side, quantity, execution_price, realized_pnl, executed_at
+    `SELECT ${TRADE_SELECT}
      FROM trades
      WHERE ${clauses.join(" AND ")}
      ORDER BY executed_at DESC`,
@@ -91,11 +108,24 @@ export async function findTradesByPortfolioId(
   return result.rows.map(mapTrade);
 }
 
+export async function findTradesByStrategyRunId(
+  strategyRunId: string,
+): Promise<Trade[]> {
+  const result = await pool.query<TradeRow>(
+    `SELECT ${TRADE_SELECT}
+     FROM trades
+     WHERE strategy_run_id = $1
+     ORDER BY executed_at DESC`,
+    [strategyRunId],
+  );
+  return result.rows.map(mapTrade);
+}
+
 export async function findTradesChronological(
   portfolioId: string,
 ): Promise<Trade[]> {
   const result = await pool.query<TradeRow>(
-    `SELECT id, portfolio_id, symbol, side, quantity, execution_price, realized_pnl, executed_at
+    `SELECT ${TRADE_SELECT}
      FROM trades
      WHERE portfolio_id = $1
      ORDER BY executed_at ASC`,

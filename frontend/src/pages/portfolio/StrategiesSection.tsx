@@ -8,8 +8,11 @@ import {
   stopStrategyRun,
 } from "../../api/strategyRuns";
 import { useActivePortfolio } from "../../contexts/ActivePortfolioContext";
+import { useSettings } from "../../contexts/SettingsContext";
 import type { StrategySummary } from "../../types/strategy";
 import type { StrategyRun } from "../../types/strategyRun";
+import { formatDateTime } from "../../utils/datetime";
+import { formatMoney, formatPnL } from "./format";
 import styles from "./PortfolioHub.module.css";
 
 const HEARTBEAT_MS = 25_000;
@@ -30,11 +33,17 @@ function formatTime(value: string | null): string {
   }
 }
 
+function formatWinRate(value: number | null): string {
+  if (value == null) return "—";
+  return `${value.toFixed(0)}%`;
+}
+
 export default function StrategiesSection() {
   const { portfolioId } = useParams();
   const [searchParams] = useSearchParams();
   const requestedSymbol = searchParams.get("symbol")?.trim().toUpperCase() ?? "";
   const { setActivePortfolioId, refreshPortfolios } = useActivePortfolio();
+  const { clockFormat } = useSettings();
 
   const [strategies, setStrategies] = useState<StrategySummary[]>([]);
   const [run, setRun] = useState<StrategyRun | null>(null);
@@ -170,6 +179,8 @@ export default function StrategiesSection() {
   }
 
   const isRunning = run?.status === "running";
+  const stats = run?.stats;
+  const trades = run?.trades ?? [];
 
   return (
     <div>
@@ -259,47 +270,132 @@ export default function StrategiesSection() {
       </div>
 
       {run ? (
-        <div className={styles.section}>
-          <h2 className={styles.sectionTitle}>Status</h2>
-          <div
-            className={styles.summaryGrid}
-            style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}
-          >
-            <div className={styles.summaryCard}>
-              <h2>State</h2>
-              <p>{presenceLabel(run)}</p>
+        <>
+          <div className={styles.section}>
+            <h2 className={styles.sectionTitle}>Status</h2>
+            <div
+              className={styles.summaryGrid}
+              style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}
+            >
+              <div className={styles.summaryCard}>
+                <h2>State</h2>
+                <p>{presenceLabel(run)}</p>
+              </div>
+              <div className={styles.summaryCard}>
+                <h2>Strategy</h2>
+                <p>
+                  {run.strategyName} · {run.symbol}
+                </p>
+              </div>
+              <div className={styles.summaryCard}>
+                <h2>Last bar</h2>
+                <p style={{ fontSize: "0.95rem" }}>
+                  {formatTime(run.lastProcessedBarTime)}
+                </p>
+              </div>
             </div>
-            <div className={styles.summaryCard}>
-              <h2>Strategy</h2>
-              <p>
-                {run.strategyName} · {run.symbol}
-              </p>
-            </div>
-            <div className={styles.summaryCard}>
-              <h2>Last bar</h2>
-              <p style={{ fontSize: "0.95rem" }}>
-                {formatTime(run.lastProcessedBarTime)}
-              </p>
-            </div>
+
+            {run.lastError ? (
+              <div className={styles.error} role="alert">
+                {run.lastError}
+              </div>
+            ) : null}
           </div>
 
-          {run.lastError ? (
-            <div className={styles.error} role="alert">
-              {run.lastError}
+          <div className={styles.section}>
+            <div className={styles.sectionHeader}>
+              <h2 className={styles.sectionTitle}>Run performance</h2>
+              {portfolioId ? (
+                <Link
+                  className={styles.inlineLink}
+                  to={`/portfolio/${portfolioId}/history?source=strategy&strategyRunId=${encodeURIComponent(run.id)}`}
+                >
+                  Open in History
+                </Link>
+              ) : null}
             </div>
-          ) : null}
+            <div
+              className={styles.summaryGrid}
+              style={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))" }}
+            >
+              <div className={styles.summaryCard}>
+                <h2>Trades</h2>
+                <p>{stats?.tradeCount ?? 0}</p>
+              </div>
+              <div className={styles.summaryCard}>
+                <h2>Buys / Sells</h2>
+                <p>
+                  {stats?.buyCount ?? 0} / {stats?.sellCount ?? 0}
+                </p>
+              </div>
+              <div className={styles.summaryCard}>
+                <h2>Realized PnL</h2>
+                <p>{formatPnL(stats?.realizedPnL ?? 0)}</p>
+              </div>
+              <div className={styles.summaryCard}>
+                <h2>Win rate</h2>
+                <p>{formatWinRate(stats?.winRate ?? null)}</p>
+              </div>
+            </div>
 
-          <h3 className={styles.sectionTitle}>Run log</h3>
-          {run.logs.length === 0 ? (
-            <p className={styles.message}>No log lines yet.</p>
-          ) : (
-            <div className={styles.tableWrap}>
-              <pre className={styles.runLog}>
-                {[...run.logs].reverse().join("\n")}
-              </pre>
-            </div>
-          )}
-        </div>
+            {trades.length === 0 ? (
+              <p className={styles.message}>
+                No fills for this run yet. New closed bars after arming are
+                required before the strategy can trade.
+              </p>
+            ) : (
+              <div className={styles.tableWrap}>
+                <table className={styles.table}>
+                  <thead>
+                    <tr>
+                      <th>Time</th>
+                      <th>Side</th>
+                      <th>Qty</th>
+                      <th>Price</th>
+                      <th>Realized</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {trades.map((trade) => (
+                      <tr key={trade.id}>
+                        <td>
+                          {formatDateTime(trade.executedAt, clockFormat)}
+                        </td>
+                        <td
+                          className={
+                            trade.side === "buy" ? styles.buy : styles.sell
+                          }
+                        >
+                          {trade.side}
+                        </td>
+                        <td>{trade.quantity}</td>
+                        <td>{formatMoney(trade.executionPrice)}</td>
+                        <td>
+                          {trade.realizedPnL == null
+                            ? "—"
+                            : formatPnL(trade.realizedPnL)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          <div className={styles.section}>
+            <h2 className={styles.sectionTitle}>Run log</h2>
+            {run.logs.length === 0 ? (
+              <p className={styles.message}>No log lines yet.</p>
+            ) : (
+              <div className={styles.tableWrap}>
+                <pre className={styles.runLog}>
+                  {[...run.logs].reverse().join("\n")}
+                </pre>
+              </div>
+            )}
+          </div>
+        </>
       ) : null}
     </div>
   );

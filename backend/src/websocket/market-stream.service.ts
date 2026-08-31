@@ -30,6 +30,10 @@ export class MarketStreamService {
       this.broadcast(update.symbol, { type: "trade", data: update });
     });
 
+    this.geminiWs.on("error", (error: Error) => {
+      console.error("[market-stream] gemini ws error:", error.message);
+    });
+
     this.geminiWs.connect();
   }
 

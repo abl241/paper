@@ -35,7 +35,8 @@ Landing overview of the product: what Paper is, how the loop works (watch → tr
 Scan and discover live crypto markets from Gemini or Coinbase.
 - Movers strip (gainers, losers, volume) plus tabs for Watchlist, Holdings, Gainers, Losers, Top, and Browse
 - Sortable table with last, bid/ask, 24h % / $ change, volume, and sparklines
-- Live ticker flashes over WebSocket; holdings highlighted from the active portfolio
+- Live ticker flashes — **Gemini** via backend WebSocket; **Coinbase** via REST polling at your refresh interval
+- Holdings highlighted from the active portfolio
 - Focused symbol view with candlestick charts (TradingView Lightweight Charts) and trade prints
 - Focused view also jumps straight to Trade or **Run strategy** on that market for the active portfolio
 
@@ -46,8 +47,8 @@ Paper trading desk for one or more isolated portfolios (cash, positions, and his
 |-----|----------------|
 | **Overview** | Equity, cash, open positions, and a high-level snapshot of the book |
 | **Trade** | Place simulated market buys/sells filled at live ask/bid |
-| **Strategies** | Run one saved Lab strategy on live candles for this book — paper fills land in the portfolio |
-| **History** | Full fill / trade log for the selected portfolio |
+| **Strategies** | Run one saved Lab strategy on live candles for this book — paper fills land in the portfolio; run stats and fill history live on the tab |
+| **History** | Full fill / trade log for the selected portfolio (filter by strategy vs manual) |
 | **Performance** | Equity curve and performance view over time |
 | **Settings** | Portfolio-level options (e.g. name, exchange preference, cash deposits / withdrawals / reset) |
 
@@ -71,12 +72,13 @@ The portfolio Strategies tab arms one strategy per portfolio and evaluates it on
 - **Presence-gated** — the backend only polls candles while the tab is open and sending heartbeats, so an idle session costs zero exchange calls
 - **Catch-up on return** — when you come back, closed bars missed while away are replayed in order before live evaluation resumes
 - Run state (armed strategy, last processed bar, log, last error) persists across sessions until you stop it
+- Run performance (trade count, realized PnL, win rate) and the run’s fill list update on the Strategies tab; History can filter to strategy fills
 
 ### Settings
-Account-wide preferences: preferred exchange, price refresh interval, equity chart defaults (range, resolution, y-axis), and clock format.
+Account-wide preferences: preferred exchange, price refresh interval (throttles Gemini WebSocket updates and Coinbase REST polling), equity chart defaults (range, resolution, y-axis), and clock format. Guests can change settings locally; logged-in users sync to the server.
 
 ### System
-Live backend health check against `/health` (API up, DB connectivity). Useful when debugging local or deployed environments.
+Live backend health check against `/health` — returns API status and a PostgreSQL connectivity probe (`database: ok | error`). Useful when debugging local or deployed environments.
 
 ### Cross-cutting
 - JWT auth (register / login); Strategy Lab, Research, and Portfolio require a session
@@ -88,25 +90,25 @@ Live backend health check against `/health` (API up, DB connectivity). Useful wh
 ## Architecture
 
 ```
-┌─────────────┐    REST + WS     ┌───────────────────┐    REST / WS     ┌────────────┐
-│  React UI   │ ◄──────────────► │  Express API      │ ◄──────────────► │ Gemini /   │
-│  (Vite)     │                  │  + stream broker  │                  │ Coinbase   │
-└─────────────┘                  └─────────┬─────────┘                  └────────────┘
-                                           │
-                                           ▼
-                                    ┌─────────────┐
-                                    │ PostgreSQL  │
-                                    │ portfolios  │
-                                    │ positions   │
-                                    │ trades      │
-                                    └─────────────┘
+┌─────────────┐   REST + WS (Gemini)  ┌───────────────────┐   REST + WS (Gemini)  ┌────────────┐
+│  React UI   │ ◄────────────────────► │  Express API      │ ◄────────────────────► │ Gemini     │
+│  (Vite)     │   REST poll (Coinbase) │  + stream broker  │        REST only       │ Coinbase   │
+└─────────────┘                        └─────────┬─────────┘                        └────────────┘
+                                                 │
+                                                 ▼
+                                          ┌─────────────┐
+                                          │ PostgreSQL  │
+                                          │ portfolios  │
+                                          │ positions   │
+                                          │ trades      │
+                                          └─────────────┘
 ```
 
 **Venue boundary** — Gemini and Coinbase adapters implement a shared `Exchange` interface. The rest of the app never speaks a venue-specific dialect.
 
 **Correctness under concurrency** — paper fills run in SQL transactions with row locks on portfolio cash and positions, so overlapping orders don't invent money or shares.
 
-**Stream fan-out** — the backend holds upstream WebSocket connections and fans ticker/trade updates to subscribed browsers. Upstream subscriptions are reference-counted; idle symbols drop off the wire.
+**Stream fan-out** — for Gemini, the backend holds one upstream WebSocket and fans ticker/trade updates to subscribed browsers; upstream subscriptions are reference-counted so idle symbols drop off the wire. Coinbase live quotes are polled over REST from the frontend at the configured refresh interval.
 
 ---
 
@@ -141,12 +143,13 @@ paper/
 **Needs:** Node.js 20+, PostgreSQL
 
 ```bash
-cp .env.example .env          # set DATABASE_URL, JWT_SECRET, …
+createdb paper_trading          # or create the DB named in DATABASE_URL
+cp .env.example .env            # set DATABASE_URL, JWT_SECRET, …
 npm install
-npm run dev                   # API on :3001, UI on :5173
+npm run dev                     # API on :3001, UI on :5173
 ```
 
-Migrations apply automatically when the backend starts.
+Vite reads env from the repo root (see `frontend/vite.config.ts`). Migrations apply automatically when the backend starts.
 
 ---
 

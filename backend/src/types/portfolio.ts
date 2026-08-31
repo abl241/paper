@@ -40,6 +40,8 @@ export interface Trade {
   executionPrice: number;
   realizedPnL: number | null;
   executedAt: Date;
+  /** Set when the fill came from a live paper strategy run. */
+  strategyRunId: string | null;
 }
 
 export interface PortfolioSummary {
@@ -103,11 +105,15 @@ export interface CashLedgerEntry {
   createdAt: Date;
 }
 
+export type TradeSourceFilter = "all" | "strategy" | "manual";
+
 export interface TradeFilters {
   symbol?: string;
   side?: "buy" | "sell";
   from?: Date;
   to?: Date;
+  source?: TradeSourceFilter;
+  strategyRunId?: string;
 }
 
 export interface EquityPoint {

@@ -1,4 +1,5 @@
 export interface HealthResponse {
-  status: "ok";
+  status: "ok" | "degraded";
   service: "backend";
+  database: "ok" | "error";
 }

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { getMarketSummaries } from "../api/markets";
 import { useSettings } from "../contexts/SettingsContext";
 import type { ConnectionState, ServerMessage } from "../types/websocket";
+import { restPollIntervalMs } from "../utils/restPollInterval";
 import { getWebSocketUrl } from "../utils/ws";
 
 const MAX_LIVE_SYMBOLS = 15;
@@ -17,7 +19,7 @@ interface LiveMarketsState {
 }
 
 /**
- * Subscribe to a capped set of symbols over the Gemini market WebSocket.
+ * Live quotes for a capped symbol set — Gemini via WebSocket, Coinbase via REST polling.
  */
 export function useMarketStreams(symbols: string[]): LiveMarketsState {
   const { priceRefreshMs, exchange } = useSettings();
@@ -51,8 +53,42 @@ export function useMarketStreams(symbols: string[]): LiveMarketsState {
     }
 
     if (exchange !== "gemini") {
-      setConnectionState("disconnected");
-      return;
+      let cancelled = false;
+      const pollMs = restPollIntervalMs(priceRefreshMs);
+
+      const poll = async () => {
+        try {
+          const result = await getMarketSummaries({ symbols: capped });
+          if (cancelled) {
+            return;
+          }
+
+          const next: Record<string, LiveQuote> = {};
+          for (const item of result.items) {
+            next[item.symbol] = {
+              bid: item.bid,
+              ask: item.ask,
+              last: item.last,
+            };
+          }
+          latestRef.current = next;
+          setQuotes(next);
+          setConnectionState("connected");
+        } catch {
+          if (!cancelled) {
+            setConnectionState("disconnected");
+          }
+        }
+      };
+
+      setConnectionState("connecting");
+      void poll();
+      const timer = window.setInterval(() => void poll(), pollMs);
+
+      return () => {
+        cancelled = true;
+        window.clearInterval(timer);
+      };
     }
 
     setConnectionState("connecting");

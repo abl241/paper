@@ -25,6 +25,8 @@ export class GeminiWsClient extends EventEmitter {
     super();
     this.url = options.url;
     this.reconnectDelayMs = options.reconnectDelayMs ?? 2_000;
+    // Node treats unhandled "error" emits as fatal — log only, never crash the API.
+    this.on("error", () => {});
   }
 
   connect(): void {

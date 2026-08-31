@@ -1,15 +1,26 @@
 import type { Request, Response } from "express";
+import { verifyDatabaseConnection } from "../config/database.js";
 
 export interface HealthResponse {
-  status: "ok";
+  status: "ok" | "degraded";
   service: "backend";
+  database: "ok" | "error";
 }
 
-export function healthCheck(_req: Request, res: Response): void {
+export async function healthCheck(_req: Request, res: Response): Promise<void> {
+  let database: HealthResponse["database"] = "ok";
+
+  try {
+    await verifyDatabaseConnection();
+  } catch {
+    database = "error";
+  }
+
   const body: HealthResponse = {
-    status: "ok",
+    status: database === "ok" ? "ok" : "degraded",
     service: "backend",
+    database,
   };
 
-  res.status(200).json(body);
+  res.status(database === "ok" ? 200 : 503).json(body);
 }

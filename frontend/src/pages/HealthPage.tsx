@@ -55,7 +55,11 @@ export default function HealthPage() {
 
       {state.status === "success" && (
         <div className={styles.success}>
-          <p className={styles.statusOk}>Backend is reachable</p>
+          <p className={styles.statusOk}>
+            {state.data.status === "ok" && state.data.database === "ok"
+              ? "Backend is reachable"
+              : "Backend reachable but degraded"}
+          </p>
           <pre className={styles.response}>
             {JSON.stringify(state.data, null, 2)}
           </pre>

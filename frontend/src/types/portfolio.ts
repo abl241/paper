@@ -48,6 +48,7 @@ export interface Trade {
   executionPrice: number;
   realizedPnL: number | null;
   executedAt: string;
+  strategyRunId?: string | null;
 }
 
 export interface PortfolioSummary {

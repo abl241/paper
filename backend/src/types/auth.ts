@@ -3,6 +3,7 @@ export interface User {
   username: string;
   email: string;
   passwordHash: string;
+  emailVerified: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -11,6 +12,7 @@ export interface PublicUser {
   id: string;
   username: string;
   email: string;
+  emailVerified: boolean;
   createdAt: string;
 }
 

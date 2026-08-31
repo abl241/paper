@@ -6,6 +6,7 @@ interface UserRow {
   username: string;
   email: string;
   password_hash: string;
+  email_verified: boolean;
   created_at: Date;
   updated_at: Date;
 }
@@ -16,14 +17,18 @@ function mapUser(row: UserRow): User {
     username: row.username,
     email: row.email,
     passwordHash: row.password_hash,
+    emailVerified: row.email_verified,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
 }
 
+const USER_COLUMNS =
+  "id, username, email, password_hash, email_verified, created_at, updated_at";
+
 export async function findUserByEmail(email: string): Promise<User | null> {
   const result = await pool.query<UserRow>(
-    `SELECT id, username, email, password_hash, created_at, updated_at
+    `SELECT ${USER_COLUMNS}
      FROM users
      WHERE email = $1`,
     [email.toLowerCase()],
@@ -34,7 +39,7 @@ export async function findUserByEmail(email: string): Promise<User | null> {
 
 export async function findUserByUsername(username: string): Promise<User | null> {
   const result = await pool.query<UserRow>(
-    `SELECT id, username, email, password_hash, created_at, updated_at
+    `SELECT ${USER_COLUMNS}
      FROM users
      WHERE username = $1`,
     [username.toLowerCase()],
@@ -45,7 +50,7 @@ export async function findUserByUsername(username: string): Promise<User | null>
 
 export async function findUserById(id: string): Promise<User | null> {
   const result = await pool.query<UserRow>(
-    `SELECT id, username, email, password_hash, created_at, updated_at
+    `SELECT ${USER_COLUMNS}
      FROM users
      WHERE id = $1`,
     [id],
@@ -60,9 +65,9 @@ export async function createUser(input: {
   passwordHash: string;
 }): Promise<User> {
   const result = await pool.query<UserRow>(
-    `INSERT INTO users (username, email, password_hash)
-     VALUES ($1, $2, $3)
-     RETURNING id, username, email, password_hash, created_at, updated_at`,
+    `INSERT INTO users (username, email, password_hash, email_verified)
+     VALUES ($1, $2, $3, TRUE)
+     RETURNING ${USER_COLUMNS}`,
     [input.username.toLowerCase(), input.email.toLowerCase(), input.passwordHash],
   );
 

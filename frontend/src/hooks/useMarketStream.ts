@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
+import { getTicker } from "../api/markets";
 import { useSettings } from "../contexts/SettingsContext";
 import type {
   ConnectionState,
   ServerMessage,
   TickerUpdate,
 } from "../types/websocket";
+import { restPollIntervalMs } from "../utils/restPollInterval";
 import { getWebSocketUrl } from "../utils/ws";
 
 interface LiveMarketState {
@@ -42,10 +44,41 @@ export function useMarketStream(symbol: string | undefined): LiveMarketState {
       flushTimerRef.current = null;
     }
 
-    // Live WebSocket market stream is Gemini-backed today.
     if (exchange !== "gemini") {
-      setConnectionState("disconnected");
-      return;
+      let cancelled = false;
+      const pollMs = restPollIntervalMs(priceRefreshMs);
+
+      const poll = async () => {
+        try {
+          const ticker = await getTicker(symbol);
+          if (cancelled) {
+            return;
+          }
+
+          const update: TickerUpdate = {
+            symbol: ticker.symbol,
+            bid: ticker.bid,
+            ask: ticker.ask,
+            last: ticker.last,
+            timestamp: ticker.timestamp,
+          };
+          latestTickerRef.current = update;
+          setTickerUpdate(update);
+          setConnectionState("connected");
+        } catch {
+          if (!cancelled) {
+            setConnectionState("disconnected");
+          }
+        }
+      };
+
+      void poll();
+      const timer = window.setInterval(() => void poll(), pollMs);
+
+      return () => {
+        cancelled = true;
+        window.clearInterval(timer);
+      };
     }
 
     const flush = () => {

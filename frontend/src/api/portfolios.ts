@@ -87,6 +87,8 @@ export async function getPortfolioTrades(
     side?: "buy" | "sell";
     from?: string;
     to?: string;
+    source?: "all" | "strategy" | "manual";
+    strategyRunId?: string;
   } = {},
 ): Promise<Trade[]> {
   const { data } = await apiClient.get<ApiResponse<Trade[]>>(
