@@ -2,15 +2,13 @@
 
 **Simulated crypto trading against live exchange data.**
 
-Real prices. Simulated fills. Honest portfolio math. Paper is a full-stack trading sandbox wired to live venues — no exchange API keys, no capital at risk — built to understand how market systems behave end to end.
+Paper is a full-stack trading sandbox. It streams live prices from Gemini and Coinbase, simulates fills, and tracks cash, positions, and PnL. No exchange API keys and no real capital; the goal is to see how a market stack behaves from tick to portfolio.
 
 ---
 
 ## Why this exists
 
-Markets are a feedback loop: information moves, prices update, decisions follow. I wanted a place to practice that loop without risking money — and then kept going. How do you normalize tick data across venues? How do you keep cash and positions correct when orders race? What does a trading UI need when the book moves every few hundred milliseconds?
-
-Paper is that project: equal parts market curiosity and systems engineering.
+I wanted somewhere to practice trading decisions without risking money, then stayed interested in the systems side: normalizing tick data across venues, keeping cash and positions correct when orders race, and building a UI that keeps up when the book moves every few hundred milliseconds.
 
 ---
 
@@ -18,69 +16,69 @@ Paper is that project: equal parts market curiosity and systems engineering.
 
 | | |
 |---|---|
-| **What it is** | Paper trading platform for crypto, powered by live Gemini / Coinbase market data |
-| **What it isn't** | A broker, a signal product, or a place to place real orders |
-| **Core loop** | Stream prices → size a paper trade → update cash, positions, PnL |
+| **What it is** | Paper trading for crypto, using live Gemini / Coinbase market data |
+| **What it isn't** | A broker, a signal product, or a way to place real orders |
+| **Main flow** | Stream prices → size a paper trade → update cash, positions, PnL |
 
 ---
 
 ## Features
 
-Paper is organized around the main nav tabs. Each one is a stage in the paper-trading loop.
+Organized by the main nav tabs.
 
 ### Home
-Landing overview of the product: what Paper is, how the loop works (watch → trade → build → backtest), and quick links into the main workspaces.
+Landing page: what Paper is, the watch → trade → build → backtest flow, and links into the main workspaces.
 
 ### Markets
-Scan and discover live crypto markets from Gemini or Coinbase.
-- Movers strip (gainers, losers, volume) plus tabs for Watchlist, Holdings, Gainers, Losers, Top, and Browse
+Browse live crypto markets from Gemini or Coinbase.
+- Movers strip (gainers, losers, volume) and tabs for Watchlist, Holdings, Gainers, Losers, Top, and Browse
 - Sortable table with last, bid/ask, 24h % / $ change, volume, and sparklines
-- Live ticker flashes — **Gemini** via backend WebSocket; **Coinbase** via REST polling at your refresh interval
+- Live ticker updates: **Gemini** over a backend WebSocket; **Coinbase** via REST polling at your refresh interval
 - Holdings highlighted from the active portfolio
 - Focused symbol view with candlestick charts (TradingView Lightweight Charts) and trade prints
-- Focused view also jumps straight to Trade or **Run strategy** on that market for the active portfolio
+- From the focused view you can open Trade or **Run strategy** on that market for the active portfolio
 
 ### Portfolio
-Paper trading desk for one or more isolated portfolios (cash, positions, and history per portfolio). Sub-tabs:
+One or more isolated paper books (cash, positions, and history per portfolio). Sub-tabs:
 
 | Tab | What it does |
 |-----|----------------|
-| **Overview** | Equity, cash, open positions, and a high-level snapshot of the book |
-| **Trade** | Place simulated market buys/sells filled at live ask/bid |
-| **Strategies** | Run one saved Lab strategy on live candles for this book — paper fills land in the portfolio; run stats and fill history live on the tab |
-| **History** | Full fill / trade log for the selected portfolio (filter by strategy vs manual) |
-| **Performance** | Equity curve and performance view over time |
-| **Settings** | Portfolio-level options (e.g. name, exchange preference, cash deposits / withdrawals / reset) |
+| **Overview** | Equity, cash, open positions, and a short book summary |
+| **Trade** | Simulated market buys/sells filled at live ask/bid |
+| **Strategies** | Run one saved Lab strategy on live candles for this book; paper fills hit the portfolio, with run stats and fill history on the tab |
+| **History** | Fill / trade log for the selected portfolio (filter by strategy vs manual) |
+| **Performance** | Equity curve and performance over time |
+| **Settings** | Portfolio options (name, exchange preference, cash deposits / withdrawals / reset) |
 
 ### Strategy Lab
-Author and validate TypeScript strategies against a controlled `StrategyContext` API (no imports or `fetch` — only buy/sell, bars, indicators, portfolio, and params).
-- Library of templates (SMA crossover, RSI mean reversion, blank scaffold) plus your saved drafts
+Write TypeScript strategies against a fixed `StrategyContext` API (no imports or `fetch`; only buy/sell, bars, indicators, portfolio, and params).
+- Templates (SMA crossover, RSI mean reversion, blank scaffold) plus your saved drafts
 - Monaco editor with autocomplete and JSDoc hover
 - Properties for symbols, timeframe, params, and risk metadata
 - Validate / dry-run with console output
-- **API Explorer** — searchable docs dock (toolbar **API**, right-edge tab, or Ctrl/Cmd+Shift+D); Insert Example pastes snippets into the editor
+- **API Explorer**: searchable docs (toolbar **API**, right-edge tab, or Ctrl/Cmd+Shift+D). Insert Example pastes snippets into the editor
 
 ### Research
-Backtest saved Lab strategies on historical candles using the same Strategy API.
+Backtest saved Lab strategies on historical candles with the same Strategy API.
 - Pick strategy, symbol, range, and timeframe
 - Run backtests and inspect equity / results
-- Jump in from Strategy Lab with a strategy pre-selected
-- For live-market runs against a real book, use the portfolio **Strategies** tab
+- Open from Strategy Lab with a strategy already selected
+- For live runs against a real book, use the portfolio **Strategies** tab
 
 ### Live paper runs
-The portfolio Strategies tab arms one strategy per portfolio and evaluates it on closed candles, filling through the same transactional paper-trading path as manual orders.
-- **Presence-gated** — the backend only polls candles while the tab is open and sending heartbeats, so an idle session costs zero exchange calls
-- **Catch-up on return** — when you come back, closed bars missed while away are replayed in order before live evaluation resumes
+The portfolio Strategies tab arms one strategy per portfolio and evaluates it on closed candles, using the same transactional fill path as manual orders.
+- **Presence-gated**: the backend polls candles only while the tab is open and sending heartbeats, so an idle session makes no exchange calls
+- **Catch-up on return**: closed bars missed while away are replayed in order before live evaluation continues
 - Run state (armed strategy, last processed bar, log, last error) persists across sessions until you stop it
 - Run performance (trade count, realized PnL, win rate) and the run’s fill list update on the Strategies tab; History can filter to strategy fills
 
 ### Settings
-Account-wide preferences: preferred exchange, price refresh interval (throttles Gemini WebSocket updates and Coinbase REST polling), equity chart defaults (range, resolution, y-axis), and clock format. Guests can change settings locally; logged-in users sync to the server.
+Account-wide preferences: preferred exchange, price refresh interval (throttles Gemini WebSocket updates and Coinbase REST polling), equity chart defaults (range, resolution, y-axis), and clock format. Guests keep settings locally; logged-in users sync to the server.
 
 ### System
-Live backend health check against `/health` — returns API status and a PostgreSQL connectivity probe (`database: ok | error`). Useful when debugging local or deployed environments.
+Backend health check at `/health`: API status plus a PostgreSQL connectivity probe (`database: ok | error`). Handy when debugging local or deployed setups.
 
-### Cross-cutting
+### Shared pieces
 - JWT auth (register / login); Strategy Lab, Research, and Portfolio require a session
 - Exchange-agnostic market layer (Gemini REST + WS, Coinbase REST)
 - Concurrent paper fills use SQL transactions with row locks so cash and positions stay consistent
@@ -104,11 +102,11 @@ Live backend health check against `/health` — returns API status and a Postgre
                                           └─────────────┘
 ```
 
-**Venue boundary** — Gemini and Coinbase adapters implement a shared `Exchange` interface. The rest of the app never speaks a venue-specific dialect.
+**Venue boundary.** Gemini and Coinbase adapters implement a shared `Exchange` interface. The rest of the app does not speak venue-specific APIs.
 
-**Correctness under concurrency** — paper fills run in SQL transactions with row locks on portfolio cash and positions, so overlapping orders don't invent money or shares.
+**Concurrent fills.** Paper fills run in SQL transactions with row locks on portfolio cash and positions, so overlapping orders cannot invent money or shares.
 
-**Stream fan-out** — for Gemini, the backend holds one upstream WebSocket and fans ticker/trade updates to subscribed browsers; upstream subscriptions are reference-counted so idle symbols drop off the wire. Coinbase live quotes are polled over REST from the frontend at the configured refresh interval.
+**Stream fan-out.** For Gemini, the backend holds one upstream WebSocket and fans ticker/trade updates to subscribed browsers. Upstream subscriptions are reference-counted so idle symbols drop off. Coinbase live quotes are polled over REST from the frontend at the configured refresh interval.
 
 ---
 
@@ -116,11 +114,11 @@ Live backend health check against `/health` — returns API status and a Postgre
 
 | Layer | |
 |-------|--|
-| Frontend | React 19 · React Router · Vite · TypeScript · CSS Modules · Monaco · Lightweight Charts |
-| Backend | Node.js · Express · TypeScript · `ws` |
-| Data | PostgreSQL · versioned SQL migrations |
-| Auth | JWT · bcrypt |
-| Venues | Gemini (REST + WebSocket) · Coinbase (REST) |
+| Frontend | React 19, React Router, Vite, TypeScript, CSS Modules, Monaco, Lightweight Charts |
+| Backend | Node.js, Express, TypeScript, `ws` |
+| Data | PostgreSQL, versioned SQL migrations |
+| Auth | JWT, bcrypt |
+| Venues | Gemini (REST + WebSocket), Coinbase (REST) |
 
 npm workspaces monorepo: `backend/` + `frontend/`.
 
@@ -155,20 +153,20 @@ Vite reads env from the repo root (see `frontend/vite.config.ts`). Migrations ap
 
 ## Reading the code
 
-A few intentional choices:
+Some design choices worth knowing:
 
-1. **Domain over venue** — symbols and tickers are normalized in-app; mappers live at the exchange edge.
-2. **Portfolios own state** — cash, positions, and trades hang off `portfolio_id`, so strategies stay isolated. Live paper runs attach one strategy per portfolio and fill through the same book.
-3. **Paper ≠ toy** — fills still use bid/ask, validate quantity, and reject insufficient cash or size.
-4. **Cheap streams** — reference-counted upstream subscriptions keep the wire quiet when nobody is watching.
-5. **Strategy API sandbox** — Lab strategies talk only to `StrategyContext` (no imports/`fetch`); Research and live paper runs reuse that same surface.
+1. **Domain over venue.** Symbols and tickers are normalized in-app; mappers live at the exchange edge.
+2. **Portfolios own state.** Cash, positions, and trades hang off `portfolio_id`, so strategies stay isolated. Live paper runs attach one strategy per portfolio and fill through the same book.
+3. **Paper is still strict.** Fills use bid/ask, validate quantity, and reject insufficient cash or size.
+4. **Quiet streams.** Reference-counted upstream subscriptions keep the wire quiet when nobody is watching.
+5. **Strategy API sandbox.** Lab strategies talk only to `StrategyContext` (no imports/`fetch`). Research and live paper runs reuse that same surface.
 
 ---
 
 ## Status
 
-Active personal project. The core loop — live data → paper trade → portfolio — works. Strategy Lab and Research cover authoring and backtesting; portfolio Strategies runs live paper (presence + catch-up). Ongoing work: UX polish, broader exchange coverage, richer performance analytics.
+Active personal project. Live data, paper trading, and portfolio tracking work. Strategy Lab and Research cover authoring and backtesting; portfolio Strategies runs live paper (presence + catch-up). Still iterating on UX, exchange coverage, and performance analytics.
 
 ---
 
-*Private — portfolio / learning project.*
+*Private. Portfolio / learning project.*

@@ -26,6 +26,7 @@ export class GeminiWsClient extends EventEmitter {
   private reconnectTimer: NodeJS.Timeout | undefined;
   private staleTimer: NodeJS.Timeout | undefined;
   private shouldReconnect = true;
+  private reconnectAttempt = 0;
 
   constructor(options: GeminiWsClientOptions) {
     super();
@@ -44,6 +45,7 @@ export class GeminiWsClient extends EventEmitter {
 
     this.ws.on("open", () => {
       logger.info("gemini-ws", "connected");
+      this.reconnectAttempt = 0;
       this.emit("connected");
 
       if (this.subscriptions.size > 0) {
@@ -114,10 +116,16 @@ export class GeminiWsClient extends EventEmitter {
       return;
     }
 
+    const delay = Math.min(
+      this.reconnectDelayMs * 1.5 ** this.reconnectAttempt,
+      30_000,
+    );
+    logger.info("gemini-ws", `reconnecting in ${delay}ms (attempt ${this.reconnectAttempt + 1})`);
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = undefined;
+      this.reconnectAttempt += 1;
       this.connect();
-    }, this.reconnectDelayMs);
+    }, delay);
   }
 
   private scheduleStaleCheck(): void {
