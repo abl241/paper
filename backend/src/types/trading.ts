@@ -5,6 +5,11 @@ export interface ExecuteOrderInput {
   quantity: number;
   /** When set, the fill is attributed to this live strategy run. */
   strategyRunId?: string;
+  /**
+   * Optional fill timestamp (e.g. strategy bar open). Defaults to NOW() in DB.
+   * Used so chart markers align to the candle that produced the signal.
+   */
+  executedAt?: Date;
 }
 
 /** Paper fill at an explicit price (catch-up / historical bar open). */

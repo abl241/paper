@@ -36,6 +36,7 @@ Browse live crypto markets from Gemini or Coinbase.
 - Live ticker updates: **Gemini** over a backend WebSocket; **Coinbase** via REST polling at your refresh interval
 - Holdings highlighted from the active portfolio
 - Focused symbol view with candlestick charts (TradingView Lightweight Charts) and trade prints
+- On the focused chart, cycle **Fills: Off → Manual → Strategy → Both** to overlay your portfolio buy/sell markers for that symbol
 - From the focused view you can open Trade or **Run strategy** on that market for the active portfolio
 
 ### Portfolio
@@ -45,7 +46,7 @@ One or more isolated paper books (cash, positions, and history per portfolio). S
 |-----|----------------|
 | **Overview** | Equity, cash, open positions, and a short book summary |
 | **Trade** | Simulated market buys/sells filled at live ask/bid |
-| **Strategies** | Run one saved Lab strategy on live candles for this book; paper fills hit the portfolio, with run stats and fill history on the tab |
+| **Strategies** | Arm one Lab strategy on live candles; status strip, price chart with buy/sell markers, cumulative realized PnL, fills, and run log |
 | **History** | Fill / trade log for the selected portfolio (filter by strategy vs manual) |
 | **Performance** | Equity curve and performance over time |
 | **Settings** | Portfolio options (name, exchange preference, cash deposits / withdrawals / reset) |
@@ -61,7 +62,7 @@ Write TypeScript strategies against a fixed `StrategyContext` API (no imports or
 ### Research
 Backtest saved Lab strategies on historical candles with the same Strategy API.
 - Pick strategy, symbol, range, and timeframe
-- Run backtests and inspect equity / results
+- Results show a **price chart with fill markers**, then the equity curve, stats, and trade list
 - Open from Strategy Lab with a strategy already selected
 - For live runs against a real book, use the portfolio **Strategies** tab
 
@@ -69,8 +70,9 @@ Backtest saved Lab strategies on historical candles with the same Strategy API.
 The portfolio Strategies tab arms one strategy per portfolio and evaluates it on closed candles, using the same transactional fill path as manual orders.
 - **Presence-gated**: the backend polls candles only while the tab is open and sending heartbeats, so an idle session makes no exchange calls
 - **Catch-up on return**: closed bars missed while away are replayed in order before live evaluation continues
+- Strategy fills store the **candle/bar time** as `executed_at` (not wall-clock catch-up time), so History and chart markers align to the bar that produced the signal
 - Run state (armed strategy, last processed bar, log, last error) persists across sessions until you stop it
-- Run performance (trade count, realized PnL, win rate) and the run’s fill list update on the Strategies tab; History can filter to strategy fills
+- The Strategies tab shows a clear presence status, price + markers, cumulative realized PnL, and the run’s fill list; History can filter to strategy fills
 
 ### Settings
 Account-wide preferences: preferred exchange, price refresh interval (throttles Gemini WebSocket updates and Coinbase REST polling), equity chart defaults (range, resolution, y-axis), and clock format. Guests keep settings locally; logged-in users sync to the server.
@@ -82,6 +84,7 @@ Backend health check at `/health`: API status plus a PostgreSQL connectivity pro
 - JWT auth (register / login); Strategy Lab, Research, and Portfolio require a session
 - Exchange-agnostic market layer (Gemini REST + WS, Coinbase REST)
 - Concurrent paper fills use SQL transactions with row locks so cash and positions stay consistent
+- Shared `PriceChart` buy/sell markers (Strategies, Research, and Market Focus fills overlay)
 
 ---
 
@@ -165,7 +168,7 @@ Some design choices worth knowing:
 
 ## Status
 
-Active personal project. Live data, paper trading, and portfolio tracking work. Strategy Lab and Research cover authoring and backtesting; portfolio Strategies runs live paper (presence + catch-up). Still iterating on UX, exchange coverage, and performance analytics.
+Active personal project. Live data, paper trading, and portfolio tracking work. Strategy Lab and Research cover authoring and backtesting; portfolio Strategies runs live paper (presence + catch-up) with price/fill charts. Market Focus can overlay manual and strategy fills on the symbol chart. Still iterating on UX, exchange coverage, and performance analytics.
 
 ---
 

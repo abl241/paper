@@ -33,6 +33,21 @@
   font-weight: 600;
 }
 
+.markerLegend {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  font-weight: 600;
+}
+
+.markerBuy {
+  color: #15803d;
+}
+
+.markerSell {
+  color: #b91c1c;
+}
+
 .legend strong {
   color: #0f172a;
   font-weight: 700;

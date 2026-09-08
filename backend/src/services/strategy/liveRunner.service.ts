@@ -431,6 +431,7 @@ export class LiveRunnerService {
             symbol: run.symbol,
             pending: queue.pending,
             fillPrice,
+            fillBarTimeSec: bar.time,
             useLivePrice: false,
             logs,
           });
@@ -458,6 +459,7 @@ export class LiveRunnerService {
             symbol: run.symbol,
             pending: queue.pending,
             fillPrice: bar.close,
+            fillBarTimeSec: bar.time,
             useLivePrice: true,
             logs,
           });
@@ -564,6 +566,8 @@ export class LiveRunnerService {
     symbol: string;
     pending: { side: "buy" | "sell"; intent: OrderIntent };
     fillPrice: number;
+    /** Unix seconds for the candle this fill belongs to (for chart markers). */
+    fillBarTimeSec: number;
     useLivePrice: boolean;
     logs: string[];
   }): Promise<string[]> {
@@ -578,6 +582,7 @@ export class LiveRunnerService {
     const positionSize = position?.quantity ?? 0;
     const price = input.fillPrice;
     const equity = cash + positionSize * price;
+    const executedAt = new Date(input.fillBarTimeSec * 1000);
 
     try {
       if (input.pending.side === "buy") {
@@ -590,6 +595,7 @@ export class LiveRunnerService {
             symbol: input.symbol,
             quantity: qty,
             strategyRunId: input.runId,
+            executedAt,
           });
           return pushLog(
             logs,
@@ -601,6 +607,7 @@ export class LiveRunnerService {
           quantity: qty,
           price,
           strategyRunId: input.runId,
+          executedAt,
         });
         return pushLog(
           logs,
@@ -623,6 +630,7 @@ export class LiveRunnerService {
           symbol: input.symbol,
           quantity: qty,
           strategyRunId: input.runId,
+          executedAt,
         });
         return pushLog(
           logs,
@@ -634,6 +642,7 @@ export class LiveRunnerService {
         quantity: qty,
         price,
         strategyRunId: input.runId,
+        executedAt,
       });
       return pushLog(
         logs,

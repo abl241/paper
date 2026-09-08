@@ -115,6 +115,7 @@ export class TradingService {
           executionPrice,
           cashBalance: locked.cashBalance,
           strategyRunId: input.strategyRunId ?? null,
+          executedAt: input.executedAt,
         });
         await client.query("COMMIT");
         return result;
@@ -127,6 +128,7 @@ export class TradingService {
         executionPrice,
         cashBalance: locked.cashBalance,
         strategyRunId: input.strategyRunId ?? null,
+        executedAt: input.executedAt,
       });
       await client.query("COMMIT");
       return result;
@@ -147,6 +149,7 @@ export class TradingService {
       executionPrice: number;
       cashBalance: number;
       strategyRunId?: string | null;
+      executedAt?: Date;
     },
   ): Promise<TradeExecutionResult> {
     const totalCost = roundUsd(input.quantity * input.executionPrice);
@@ -194,6 +197,7 @@ export class TradingService {
       executionPrice: input.executionPrice,
       realizedPnL: null,
       strategyRunId: input.strategyRunId ?? null,
+      executedAt: input.executedAt,
     });
 
     return { trade, cashBalance: updated.cashBalance };
@@ -208,6 +212,7 @@ export class TradingService {
       executionPrice: number;
       cashBalance: number;
       strategyRunId?: string | null;
+      executedAt?: Date;
     },
   ): Promise<TradeExecutionResult> {
     const position = await findPositionForUpdate(
@@ -259,6 +264,7 @@ export class TradingService {
       executionPrice: input.executionPrice,
       realizedPnL: fill.realizedPnL,
       strategyRunId: input.strategyRunId ?? null,
+      executedAt: input.executedAt,
     });
 
     return { trade, cashBalance: updated.cashBalance };

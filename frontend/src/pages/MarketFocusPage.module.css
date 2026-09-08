@@ -219,6 +219,17 @@
   color: #1d4ed8;
 }
 
+.intervalButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.fillsEmpty {
+  margin: 0.75rem 0 0;
+  color: #64748b;
+  font-size: 0.8125rem;
+}
+
 .grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

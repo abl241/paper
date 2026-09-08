@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { getCandles } from "../../api/markets";
 import { listStrategies } from "../../api/strategies";
 import {
   createBacktest,
@@ -7,7 +8,9 @@ import {
   listBacktests,
 } from "../../api/research";
 import EquityCurveChart from "../../components/charts/EquityCurveChart";
+import PriceChart from "../../components/charts/PriceChart";
 import { useAuth } from "../../contexts/AuthContext";
+import type { Candle } from "../../types/market";
 import type { StrategySummary } from "../../types/strategy";
 import type {
   BacktestDetail,
@@ -17,6 +20,11 @@ import type {
 import { BACKTEST_RANGES } from "../../types/research";
 import type { EquityPoint } from "../../types/portfolio";
 import { formatMoney } from "../../utils/format";
+import {
+  candleIntervalForStrategyTimeframe,
+  filterCandlesByBacktestRange,
+  tradesToPriceMarkers,
+} from "../../utils/strategyCharts";
 import styles from "./ResearchPage.module.css";
 
 function formatPct(value: number): string {
@@ -39,6 +47,9 @@ export default function ResearchPage() {
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [priceCandles, setPriceCandles] = useState<Candle[]>([]);
+  const [priceCandlesLoading, setPriceCandlesLoading] = useState(false);
+  const [priceCandleError, setPriceCandleError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -99,6 +110,60 @@ export default function ResearchPage() {
       equity: point.equity,
       kind: "marked" as const,
     }));
+  }, [result]);
+
+  const priceMarkers = useMemo(() => {
+    if (!result || result.status !== "completed") return [];
+    return tradesToPriceMarkers(
+      result.trades.map((trade) => ({
+        time: trade.time,
+        side: trade.side,
+        price: trade.price,
+      })),
+    );
+  }, [result]);
+
+  useEffect(() => {
+    if (!result || result.status !== "completed") {
+      setPriceCandles([]);
+      setPriceCandleError(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      setPriceCandlesLoading(true);
+      setPriceCandleError(null);
+      try {
+        const interval = candleIntervalForStrategyTimeframe(
+          result.timeframe,
+          result.exchange,
+        );
+        const fullHistory = result.rangeLabel === "max";
+        const candles = await getCandles(result.symbol, interval, {
+          fullHistory,
+          exchange: result.exchange,
+        });
+        if (cancelled) return;
+        setPriceCandles(
+          filterCandlesByBacktestRange(candles, result.rangeLabel),
+        );
+      } catch (err) {
+        if (!cancelled) {
+          setPriceCandles([]);
+          setPriceCandleError(
+            err instanceof Error ? err.message : "Failed to load price candles",
+          );
+        }
+      } finally {
+        if (!cancelled) setPriceCandlesLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [result]);
 
   async function handleRun() {
@@ -291,13 +356,47 @@ export default function ResearchPage() {
               </ul>
             ) : null}
 
-            <div className={styles.chart}>
-              <EquityCurveChart
-                points={equityPoints}
-                startingCash={result.startingCapital}
-                previewRange="ALL"
-                emptyMessage="No equity points"
-              />
+            <div className={styles.chartStack}>
+              <div className={styles.chartBlock}>
+                <h3 className={styles.chartLabel}>
+                  Price &amp; fills
+                  {result.trades.length > 0
+                    ? ` · ${result.trades.length} marker${result.trades.length === 1 ? "" : "s"}`
+                    : ""}
+                </h3>
+                {priceCandlesLoading && priceCandles.length === 0 ? (
+                  <p className={styles.muted}>Loading price chart…</p>
+                ) : priceCandleError ? (
+                  <p className={styles.muted}>{priceCandleError}</p>
+                ) : (
+                  <PriceChart
+                    symbol={result.symbol}
+                    candles={priceCandles}
+                    range="ALL"
+                    markers={priceMarkers}
+                    height={360}
+                    emptyMessage="No candle data available for this backtest window."
+                  />
+                )}
+                {result.trades.length === 0 ? (
+                  <p className={styles.chartHint}>
+                    No fills in this run — buy/sell markers appear when the
+                    strategy trades.
+                  </p>
+                ) : null}
+              </div>
+
+              <div className={styles.chartBlock}>
+                <h3 className={styles.chartLabel}>Equity</h3>
+                <div className={styles.chart}>
+                  <EquityCurveChart
+                    points={equityPoints}
+                    startingCash={result.startingCapital}
+                    previewRange="ALL"
+                    emptyMessage="No equity points"
+                  />
+                </div>
+              </div>
             </div>
           </>
         )}

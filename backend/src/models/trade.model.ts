@@ -43,23 +43,43 @@ export async function insertTrade(
     executionPrice: number;
     realizedPnL: number | null;
     strategyRunId?: string | null;
+    executedAt?: Date;
   },
 ): Promise<Trade> {
   const result = await client.query<TradeRow>(
-    `INSERT INTO trades (
-       portfolio_id, symbol, side, quantity, execution_price, realized_pnl, strategy_run_id
-     )
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
-     RETURNING ${TRADE_SELECT}`,
-    [
-      input.portfolioId,
-      input.symbol,
-      input.side,
-      input.quantity,
-      input.executionPrice,
-      input.realizedPnL,
-      input.strategyRunId ?? null,
-    ],
+    input.executedAt
+      ? `INSERT INTO trades (
+           portfolio_id, symbol, side, quantity, execution_price, realized_pnl,
+           strategy_run_id, executed_at
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING ${TRADE_SELECT}`
+      : `INSERT INTO trades (
+           portfolio_id, symbol, side, quantity, execution_price, realized_pnl,
+           strategy_run_id
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         RETURNING ${TRADE_SELECT}`,
+    input.executedAt
+      ? [
+          input.portfolioId,
+          input.symbol,
+          input.side,
+          input.quantity,
+          input.executionPrice,
+          input.realizedPnL,
+          input.strategyRunId ?? null,
+          input.executedAt,
+        ]
+      : [
+          input.portfolioId,
+          input.symbol,
+          input.side,
+          input.quantity,
+          input.executionPrice,
+          input.realizedPnL,
+          input.strategyRunId ?? null,
+        ],
   );
 
   return mapTrade(result.rows[0]);

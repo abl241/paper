@@ -77,11 +77,14 @@ export async function getTrades(symbol: string): Promise<MarketTrade[]> {
 export async function getCandles(
   symbol: string,
   interval: string,
-  options?: { fullHistory?: boolean },
+  options?: { fullHistory?: boolean; exchange?: string | null },
 ): Promise<Candle[]> {
   const extra: Record<string, string> = { interval };
   if (options?.fullHistory) {
     extra.history = "full";
+  }
+  if (options?.exchange) {
+    extra.exchange = options.exchange;
   }
   const { data } = await apiClient.get<ApiResponse<Candle[]>>(
     `/markets/candles/${encodeURIComponent(symbol)}`,

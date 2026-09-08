@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
+import { getCandles } from "../../api/markets";
 import { listStrategies } from "../../api/strategies";
 import {
   getStrategyRun,
@@ -7,21 +8,40 @@ import {
   startStrategyRun,
   stopStrategyRun,
 } from "../../api/strategyRuns";
+import EquityCurveChart from "../../components/charts/EquityCurveChart";
+import PriceChart from "../../components/charts/PriceChart";
 import { useActivePortfolio } from "../../contexts/ActivePortfolioContext";
 import { useSettings } from "../../contexts/SettingsContext";
+import type { Candle } from "../../types/market";
 import type { StrategySummary } from "../../types/strategy";
 import type { StrategyRun } from "../../types/strategyRun";
 import { formatDateTime } from "../../utils/datetime";
+import {
+  buildCumulativeRealizedPoints,
+  candleIntervalForStrategyTimeframe,
+  tradesToPriceMarkers,
+} from "../../utils/strategyCharts";
 import { formatMoney, formatPnL } from "./format";
 import styles from "./PortfolioHub.module.css";
 
 const HEARTBEAT_MS = 25_000;
+const CANDLE_REFRESH_MS = 90_000;
 const DEFAULT_SYMBOL = "BTC-USD";
 
-function presenceLabel(run: StrategyRun): string {
+function presenceHeadline(run: StrategyRun): string {
   if (run.status === "stopped") return "Stopped";
-  if (run.presence === "active") return "Live (present)";
-  return "Idle — waiting for you";
+  if (run.presence === "active") return "Watching live candles";
+  return "Armed — open this tab to process new bars";
+}
+
+function presenceDetail(run: StrategyRun): string {
+  if (run.status === "stopped") {
+    return "This run is no longer trading. Start again to arm the strategy on new closed bars.";
+  }
+  if (run.presence === "active") {
+    return "This page is sending heartbeats, so closed bars are evaluated and paper fills can happen.";
+  }
+  return "The strategy stays armed, but bars only process while this Strategies tab is open (heartbeat every ~25s).";
 }
 
 function formatTime(value: string | null): string {
@@ -52,6 +72,10 @@ export default function StrategiesSection() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [candles, setCandles] = useState<Candle[]>([]);
+  const [candlesLoading, setCandlesLoading] = useState(false);
+  const [candleError, setCandleError] = useState<string | null>(null);
+  const [logOpen, setLogOpen] = useState(false);
 
   useEffect(() => {
     if (portfolioId) {
@@ -84,6 +108,10 @@ export default function StrategiesSection() {
           const first = strategyList[0];
           setStrategyId(first.id);
           setSymbol(requestedSymbol || first.symbols[0] || DEFAULT_SYMBOL);
+        }
+
+        if (activeRun && activeRun.logs.length > 0) {
+          setLogOpen(true);
         }
       } catch (err) {
         if (!cancelled) {
@@ -130,6 +158,50 @@ export default function StrategiesSection() {
     };
   }, [portfolioId, run?.status, refreshPortfolios]);
 
+  const chartSymbol = run?.symbol ?? symbol.trim().toUpperCase();
+  const chartTimeframe = run?.timeframe;
+  const chartExchange = run?.exchange ?? null;
+  const tradeCount = run?.trades.length ?? 0;
+
+  const refreshCandles = useCallback(async () => {
+    if (!chartSymbol || !chartTimeframe) {
+      setCandles([]);
+      return;
+    }
+
+    setCandlesLoading(true);
+    setCandleError(null);
+    try {
+      const interval = candleIntervalForStrategyTimeframe(
+        chartTimeframe,
+        chartExchange,
+      );
+      const next = await getCandles(chartSymbol, interval, {
+        exchange: chartExchange,
+      });
+      setCandles(next);
+    } catch (err) {
+      setCandleError(
+        err instanceof Error ? err.message : "Failed to load candles",
+      );
+    } finally {
+      setCandlesLoading(false);
+    }
+  }, [chartExchange, chartSymbol, chartTimeframe]);
+
+  useEffect(() => {
+    if (!run) {
+      setCandles([]);
+      return;
+    }
+
+    void refreshCandles();
+    const id = window.setInterval(() => void refreshCandles(), CANDLE_REFRESH_MS);
+    return () => {
+      window.clearInterval(id);
+    };
+  }, [run?.id, run?.status, tradeCount, refreshCandles]);
+
   const onStrategyChange = useCallback(
     (nextId: string) => {
       setStrategyId(nextId);
@@ -152,6 +224,7 @@ export default function StrategiesSection() {
         symbol: symbol.trim() || undefined,
       });
       setRun(next);
+      setLogOpen(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to start");
     } finally {
@@ -174,6 +247,27 @@ export default function StrategiesSection() {
     }
   }
 
+  const markers = useMemo(() => {
+    if (!run) return [];
+    return tradesToPriceMarkers(
+      run.trades.map((trade) => ({
+        time: trade.executedAt,
+        side: trade.side,
+        price: trade.executionPrice,
+      })),
+    );
+  }, [run]);
+
+  const pnlPoints = useMemo(() => {
+    if (!run) return [];
+    return buildCumulativeRealizedPoints(run.trades, run.createdAt);
+  }, [run]);
+
+  const hasRealizedFills = useMemo(
+    () => (run?.trades.some((trade) => trade.realizedPnL != null) ?? false),
+    [run],
+  );
+
   if (loading) {
     return <p className={styles.message}>Loading strategies…</p>;
   }
@@ -186,8 +280,8 @@ export default function StrategiesSection() {
     <div>
       <p className={styles.lead}>
         Run one Strategy Lab strategy on live market candles for this portfolio.
-        Paper fills apply while you are present; when you return, missed closed
-        bars are catch-up replayed.{" "}
+        Paper fills apply while you keep this tab open; when you return, missed
+        closed bars are catch-up replayed.{" "}
         <Link className={styles.inlineLink} to="/strategy-lab">
           Open Strategy Lab
         </Link>
@@ -271,35 +365,86 @@ export default function StrategiesSection() {
 
       {run ? (
         <>
-          <div className={styles.section}>
-            <h2 className={styles.sectionTitle}>Status</h2>
-            <div
-              className={styles.summaryGrid}
-              style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}
-            >
-              <div className={styles.summaryCard}>
-                <h2>State</h2>
-                <p>{presenceLabel(run)}</p>
-              </div>
-              <div className={styles.summaryCard}>
-                <h2>Strategy</h2>
-                <p>
-                  {run.strategyName} · {run.symbol}
-                </p>
-              </div>
-              <div className={styles.summaryCard}>
-                <h2>Last bar</h2>
-                <p style={{ fontSize: "0.95rem" }}>
-                  {formatTime(run.lastProcessedBarTime)}
-                </p>
+          <div
+            className={`${styles.statusStrip} ${
+              run.status === "stopped"
+                ? styles.statusStopped
+                : run.presence === "active"
+                  ? styles.statusActive
+                  : styles.statusIdle
+            }`}
+          >
+            <div className={styles.statusMain}>
+              <span className={styles.statusDot} aria-hidden />
+              <div>
+                <p className={styles.statusHeadline}>{presenceHeadline(run)}</p>
+                <p className={styles.statusDetail}>{presenceDetail(run)}</p>
               </div>
             </div>
-
-            {run.lastError ? (
-              <div className={styles.error} role="alert">
-                {run.lastError}
+            <dl className={styles.statusMeta}>
+              <div>
+                <dt>Strategy</dt>
+                <dd>
+                  {run.strategyName} · {run.symbol} · {run.timeframe}
+                </dd>
               </div>
-            ) : null}
+              <div>
+                <dt>Last bar</dt>
+                <dd>{formatTime(run.lastProcessedBarTime)}</dd>
+              </div>
+              <div>
+                <dt>Heartbeat</dt>
+                <dd>{formatTime(run.lastHeartbeatAt)}</dd>
+              </div>
+            </dl>
+          </div>
+
+          {run.lastError ? (
+            <div className={styles.error} role="alert">
+              {run.lastError}
+            </div>
+          ) : null}
+
+          <div className={styles.section}>
+            <div className={styles.sectionHeader}>
+              <h2 className={styles.sectionTitle}>Price &amp; fills</h2>
+              {trades.length === 0 ? (
+                <span className={styles.chartHint}>
+                  Markers appear after the strategy trades
+                </span>
+              ) : (
+                <span className={styles.chartHint}>
+                  {trades.length} fill{trades.length === 1 ? "" : "s"} marked
+                </span>
+              )}
+            </div>
+
+            <div className={styles.chartPanel}>
+              {candlesLoading && candles.length === 0 ? (
+                <p className={styles.message}>Loading candles…</p>
+              ) : candleError ? (
+                <p className={styles.message}>{candleError}</p>
+              ) : (
+                <PriceChart
+                  symbol={run.symbol}
+                  candles={candles}
+                  range="ALL"
+                  markers={markers}
+                  height={420}
+                  emptyMessage={
+                    run.status === "running"
+                      ? "Waiting for candle data for this symbol…"
+                      : "No candle data for this run’s symbol."
+                  }
+                />
+              )}
+              {trades.length === 0 ? (
+                <p className={styles.chartFootnote}>
+                  Need new closed bars after arming before the strategy can
+                  signal. Keep this tab open while the run is live.
+                </p>
+              ) : null}
+            </div>
           </div>
 
           <div className={styles.section}>
@@ -314,10 +459,8 @@ export default function StrategiesSection() {
                 </Link>
               ) : null}
             </div>
-            <div
-              className={styles.summaryGrid}
-              style={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))" }}
-            >
+
+            <div className={styles.statsRow}>
               <div className={styles.summaryCard}>
                 <h2>Trades</h2>
                 <p>{stats?.tradeCount ?? 0}</p>
@@ -336,6 +479,24 @@ export default function StrategiesSection() {
                 <h2>Win rate</h2>
                 <p>{formatWinRate(stats?.winRate ?? null)}</p>
               </div>
+            </div>
+
+            <div className={styles.pnlChart}>
+              <h3 className={styles.pnlChartTitle}>Cumulative realized PnL</h3>
+              {hasRealizedFills ? (
+                <EquityCurveChart
+                  points={pnlPoints}
+                  startingCash={0}
+                  previewRange="ALL"
+                  hideToolbar
+                  emptyMessage="No realized PnL yet — appears after closing sells."
+                />
+              ) : (
+                <p className={styles.message}>
+                  Cumulative realized PnL appears after closing sells. Open buys
+                  alone do not move this curve.
+                </p>
+              )}
             </div>
 
             {trades.length === 0 ? (
@@ -384,16 +545,29 @@ export default function StrategiesSection() {
           </div>
 
           <div className={styles.section}>
-            <h2 className={styles.sectionTitle}>Run log</h2>
-            {run.logs.length === 0 ? (
-              <p className={styles.message}>No log lines yet.</p>
-            ) : (
-              <div className={styles.tableWrap}>
-                <pre className={styles.runLog}>
-                  {[...run.logs].reverse().join("\n")}
-                </pre>
-              </div>
-            )}
+            <button
+              type="button"
+              className={styles.logToggle}
+              aria-expanded={logOpen}
+              onClick={() => setLogOpen((open) => !open)}
+            >
+              <span>Run log</span>
+              <span className={styles.logToggleMeta}>
+                {run.logs.length} line{run.logs.length === 1 ? "" : "s"} ·{" "}
+                {logOpen ? "Hide" : "Show"}
+              </span>
+            </button>
+            {logOpen ? (
+              run.logs.length === 0 ? (
+                <p className={styles.message}>No log lines yet.</p>
+              ) : (
+                <div className={styles.tableWrap}>
+                  <pre className={styles.runLog}>
+                    {[...run.logs].reverse().join("\n")}
+                  </pre>
+                </div>
+              )
+            ) : null}
           </div>
         </>
       ) : null}

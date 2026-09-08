@@ -6,6 +6,7 @@ import {
   getTicker,
   getTrades,
 } from "../api/markets";
+import { getPortfolioTrades } from "../api/portfolios";
 import {
   addWatchlistItem,
   getWatchlist,
@@ -26,6 +27,7 @@ import { useSettings } from "../contexts/SettingsContext";
 import { useMarketStream } from "../hooks/useMarketStream";
 import { useTradeNavigation } from "../hooks/useTradeNavigation";
 import type { Candle, MarketTrade, OrderBook, Ticker } from "../types/market";
+import type { Trade } from "../types/portfolio";
 import {
   candleIntervalForRange,
   CHART_RANGE_OPTIONS,
@@ -33,7 +35,48 @@ import {
 } from "../types/settings";
 import { formatTime } from "../utils/datetime";
 import { formatPrice, formatQty, formatVolume } from "../utils/format";
+import { tradesToPriceMarkers } from "../utils/strategyCharts";
 import styles from "./MarketFocusPage.module.css";
+
+type FillOverlayMode = "off" | "manual" | "strategy" | "both";
+
+const FILL_OVERLAY_ORDER: FillOverlayMode[] = [
+  "off",
+  "manual",
+  "strategy",
+  "both",
+];
+
+function nextFillOverlayMode(mode: FillOverlayMode): FillOverlayMode {
+  const index = FILL_OVERLAY_ORDER.indexOf(mode);
+  return FILL_OVERLAY_ORDER[(index + 1) % FILL_OVERLAY_ORDER.length];
+}
+
+function fillOverlayLabel(mode: FillOverlayMode): string {
+  switch (mode) {
+    case "off":
+      return "Fills: Off";
+    case "manual":
+      return "Fills: Manual";
+    case "strategy":
+      return "Fills: Strategy";
+    case "both":
+      return "Fills: Both";
+  }
+}
+
+function fillOverlayHint(mode: FillOverlayMode): string {
+  switch (mode) {
+    case "off":
+      return "Show portfolio fills on the chart. Click to cycle: Manual → Strategy → Both → Off.";
+    case "manual":
+      return "Showing manual buys/sells. Click for strategy fills.";
+    case "strategy":
+      return "Showing strategy fills. Click for both.";
+    case "both":
+      return "Showing manual and strategy fills. Click to hide.";
+  }
+}
 
 export default function MarketFocusPage() {
   const { symbol: rawSymbol } = useParams();
@@ -57,6 +100,9 @@ export default function MarketFocusPage() {
   const [candles, setCandles] = useState<Candle[]>([]);
   const [chartRange, setChartRange] = useState<ChartRange>("1W");
   const [chartMode, setChartMode] = useState<"candle" | "line">("candle");
+  const [fillOverlay, setFillOverlay] = useState<FillOverlayMode>("off");
+  const [portfolioFills, setPortfolioFills] = useState<Trade[]>([]);
+  const [fillsLoading, setFillsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [candlesLoading, setCandlesLoading] = useState(false);
@@ -154,6 +200,66 @@ export default function MarketFocusPage() {
     };
   }, [isAuthenticated, symbol]);
 
+  useEffect(() => {
+    if (
+      !isAuthenticated ||
+      !activePortfolioId ||
+      !symbol ||
+      fillOverlay === "off"
+    ) {
+      setPortfolioFills([]);
+      setFillsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setFillsLoading(true);
+
+    const source =
+      fillOverlay === "manual"
+        ? ("manual" as const)
+        : fillOverlay === "strategy"
+          ? ("strategy" as const)
+          : undefined;
+
+    getPortfolioTrades(activePortfolioId, {
+      symbol,
+      source,
+    })
+      .then((data) => {
+        if (!cancelled) {
+          setPortfolioFills(data);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPortfolioFills([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setFillsLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, activePortfolioId, symbol, fillOverlay]);
+
+  const fillMarkers = useMemo(() => {
+    if (fillOverlay === "off" || portfolioFills.length === 0) {
+      return undefined;
+    }
+    return tradesToPriceMarkers(
+      portfolioFills.map((trade) => ({
+        time: trade.executedAt,
+        side: trade.side,
+        price: trade.executionPrice,
+      })),
+    );
+  }, [fillOverlay, portfolioFills]);
+
   const displayTicker = useMemo(() => {
     if (!ticker) {
       return null;
@@ -167,6 +273,9 @@ export default function MarketFocusPage() {
       updatedAt: tickerUpdate?.timestamp ?? ticker.timestamp,
     };
   }, [ticker, tickerUpdate, lastTradePrice]);
+
+  const fillsToggleEnabled =
+    isAuthenticated && Boolean(activePortfolioId) && !portfoliosLoading;
 
   async function handleWatchlistToggle() {
     if (!symbol || !isAuthenticated) {
@@ -315,6 +424,31 @@ export default function MarketFocusPage() {
             <ChartIcon /> Chart
           </h2>
           <div className={styles.chartControls}>
+            <button
+              type="button"
+              className={
+                fillOverlay === "off"
+                  ? styles.intervalButton
+                  : `${styles.intervalButton} ${styles.intervalActive}`
+              }
+              disabled={!fillsToggleEnabled}
+              title={
+                fillsToggleEnabled
+                  ? fillOverlayHint(fillOverlay)
+                  : isAuthenticated
+                    ? "Select a portfolio to overlay your fills"
+                    : "Sign in to overlay your portfolio fills"
+              }
+              aria-label={fillOverlayHint(fillOverlay)}
+              onClick={() => setFillOverlay((mode) => nextFillOverlayMode(mode))}
+            >
+              {fillOverlayLabel(fillOverlay)}
+              {fillOverlay !== "off" && fillsLoading
+                ? "…"
+                : fillOverlay !== "off"
+                  ? ` (${portfolioFills.length})`
+                  : ""}
+            </button>
             <div className={styles.modeGroup} role="group" aria-label="Chart type">
               <button
                 type="button"
@@ -365,8 +499,23 @@ export default function MarketFocusPage() {
             candles={candles}
             range={chartRange}
             mode={chartMode}
+            markers={fillMarkers}
           />
         )}
+        {fillOverlay !== "off" &&
+        fillsToggleEnabled &&
+        !fillsLoading &&
+        portfolioFills.length === 0 ? (
+          <p className={styles.fillsEmpty}>
+            No{" "}
+            {fillOverlay === "both"
+              ? "portfolio"
+              : fillOverlay === "manual"
+                ? "manual"
+                : "strategy"}{" "}
+            fills for {symbol} on this book.
+          </p>
+        ) : null}
       </section>
 
       <div className={styles.grid}>
