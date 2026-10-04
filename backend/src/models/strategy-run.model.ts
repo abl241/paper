@@ -20,6 +20,7 @@ interface StrategyRunRow {
   last_heartbeat_at: Date | null;
   last_error: string | null;
   logs: string[] | string;
+  protect_manual_positions: boolean;
   created_at: Date;
   updated_at: Date;
 }
@@ -51,6 +52,7 @@ export function mapStrategyRun(row: StrategyRunRow): StrategyRunRecord {
     lastHeartbeatAt: row.last_heartbeat_at,
     lastError: row.last_error,
     logs: parseLogs(row.logs),
+    protectManualPositions: row.protect_manual_positions !== false,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -58,7 +60,7 @@ export function mapStrategyRun(row: StrategyRunRow): StrategyRunRecord {
 
 const RUN_SELECT = `id, user_id, portfolio_id, strategy_id, strategy_name, symbol,
   timeframe, exchange, status, last_processed_bar_time, last_heartbeat_at,
-  last_error, logs, created_at, updated_at`;
+  last_error, logs, protect_manual_positions, created_at, updated_at`;
 
 export async function findRunningStrategyRun(
   portfolioId: string,
@@ -100,13 +102,15 @@ export async function insertStrategyRun(input: {
   lastProcessedBarTime: Date | null;
   lastHeartbeatAt: Date | null;
   logs: string[];
+  protectManualPositions: boolean;
 }): Promise<StrategyRunRecord> {
   const result = await pool.query<StrategyRunRow>(
     `INSERT INTO strategy_runs (
        user_id, portfolio_id, strategy_id, strategy_name, symbol, timeframe,
-       exchange, status, last_processed_bar_time, last_heartbeat_at, logs
+       exchange, status, last_processed_bar_time, last_heartbeat_at, logs,
+       protect_manual_positions
      ) VALUES (
-       $1, $2, $3, $4, $5, $6, $7, 'running', $8, $9, $10::jsonb
+       $1, $2, $3, $4, $5, $6, $7, 'running', $8, $9, $10::jsonb, $11
      )
      RETURNING ${RUN_SELECT}`,
     [
@@ -120,6 +124,7 @@ export async function insertStrategyRun(input: {
       input.lastProcessedBarTime,
       input.lastHeartbeatAt,
       JSON.stringify(input.logs),
+      input.protectManualPositions,
     ],
   );
   return mapStrategyRun(result.rows[0]);

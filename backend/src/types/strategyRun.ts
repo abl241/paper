@@ -20,6 +20,8 @@ export interface StrategyRunRecord {
   lastHeartbeatAt: Date | null;
   lastError: string | null;
   logs: string[];
+  /** When true, sells only close size this run bought. */
+  protectManualPositions: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -59,6 +61,7 @@ export interface StrategyRunView {
   logs: string[];
   trades: StrategyRunTrade[];
   stats: StrategyRunStats;
+  protectManualPositions: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -66,4 +69,6 @@ export interface StrategyRunView {
 export interface StartStrategyRunInput {
   strategyId: string;
   symbol?: string;
+  /** Default true: sells only close this run's own buys. */
+  protectManualPositions?: boolean;
 }

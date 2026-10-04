@@ -46,6 +46,7 @@ type FlashDir = "up" | "down";
 interface HoldingInfo {
   quantity: number;
   unrealizedPnL: number | null;
+  currentPrice: number | null;
 }
 
 const BROWSE_PAGE_SIZE = 25;
@@ -238,39 +239,42 @@ export default function MarketsPage() {
     };
   }, [isAuthenticated, modeReady]);
 
-  useEffect(() => {
+  const refreshHoldings = useCallback(async () => {
     if (!isAuthenticated || !activePortfolioId) {
       setHoldings({});
       setHoldingsReady(true);
       return;
     }
 
-    let cancelled = false;
     setHoldingsReady(false);
-    getPortfolioDetail(activePortfolioId)
-      .then((detail) => {
-        if (cancelled) return;
-        const next: Record<string, HoldingInfo> = {};
-        for (const position of detail.positions) {
-          if (position.quantity <= 0) continue;
-          next[position.symbol] = {
-            quantity: position.quantity,
-            unrealizedPnL: position.unrealizedPnL,
-          };
-        }
-        setHoldings(next);
-      })
-      .catch(() => {
-        if (!cancelled) setHoldings({});
-      })
-      .finally(() => {
-        if (!cancelled) setHoldingsReady(true);
-      });
-
-    return () => {
-      cancelled = true;
-    };
+    try {
+      const detail = await getPortfolioDetail(activePortfolioId);
+      const next: Record<string, HoldingInfo> = {};
+      for (const position of detail.positions) {
+        if (position.quantity <= 0) continue;
+        next[position.symbol] = {
+          quantity: position.quantity,
+          unrealizedPnL: position.unrealizedPnL,
+          currentPrice: position.currentPrice,
+        };
+      }
+      setHoldings(next);
+    } catch {
+      setHoldings({});
+    } finally {
+      setHoldingsReady(true);
+    }
   }, [isAuthenticated, activePortfolioId]);
+
+  useEffect(() => {
+    void refreshHoldings();
+  }, [refreshHoldings]);
+
+  // Refresh positions whenever Holdings is opened so strategy fills show up.
+  useEffect(() => {
+    if (mode !== "holdings") return;
+    void refreshHoldings();
+  }, [mode, refreshHoldings]);
 
   useEffect(() => {
     let cancelled = false;
@@ -399,8 +403,25 @@ export default function MarketsPage() {
           return;
         }
         const result = await getMarketSummaries({ symbols: filtered });
-        setRows(result.items);
-        setBrowseTotal(result.items.length);
+        const bySymbol = new Map(
+          result.items.map((item) => [item.symbol, item]),
+        );
+        // Always show every held symbol, even if ticker/summary enrichment fails.
+        const merged = filtered.map((symbol) => {
+          const summary = bySymbol.get(symbol);
+          if (summary) return summary;
+          const price = holdings[symbol]?.currentPrice ?? 0;
+          return {
+            symbol,
+            bid: price,
+            ask: price,
+            last: price,
+            volume24h: 0,
+            timestamp: new Date().toISOString(),
+          } satisfies MarketSummary;
+        });
+        setRows(merged);
+        setBrowseTotal(merged.length);
         return;
       }
 
@@ -429,6 +450,7 @@ export default function MarketsPage() {
     isAuthenticated,
     holdingsReady,
     heldSymbols,
+    holdings,
   ]);
 
   useEffect(() => {

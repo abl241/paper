@@ -73,7 +73,10 @@ interface StrategyContext {
   params: Record<string, number | string | boolean>;
   /** Submit a paper buy. Size via quantity, fractionOfEquity, or fractionOfCash. */
   buy(order?: OrderIntent): void;
-  /** Sell some or all of the current long position. */
+  /**
+   * Sell some or all of the current long. Bare sell() closes this strategy
+   * run's net long only — not other manual holdings on the same symbol.
+   */
   sell(order?: OrderIntent): void;
   /** Technical indicator helpers. */
   indicator: Indicators;

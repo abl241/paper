@@ -69,6 +69,7 @@ export default function StrategiesSection() {
   const [run, setRun] = useState<StrategyRun | null>(null);
   const [strategyId, setStrategyId] = useState("");
   const [symbol, setSymbol] = useState(DEFAULT_SYMBOL);
+  const [protectManual, setProtectManual] = useState(true);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -104,6 +105,7 @@ export default function StrategiesSection() {
         if (activeRun?.status === "running") {
           setStrategyId(activeRun.strategyId);
           setSymbol(activeRun.symbol);
+          setProtectManual(activeRun.protectManualPositions !== false);
         } else if (strategyList.length > 0) {
           const first = strategyList[0];
           setStrategyId(first.id);
@@ -222,6 +224,7 @@ export default function StrategiesSection() {
       const next = await startStrategyRun(portfolioId, {
         strategyId,
         symbol: symbol.trim() || undefined,
+        protectManualPositions: protectManual,
       });
       setRun(next);
       setLogOpen(true);
@@ -338,6 +341,22 @@ export default function StrategiesSection() {
               </label>
             </div>
 
+            <label className={styles.checkRow}>
+              <input
+                type="checkbox"
+                checked={protectManual}
+                disabled={isRunning || busy}
+                onChange={(event) => setProtectManual(event.target.checked)}
+              />
+              <span>
+                Only sell what this strategy buys
+                <span className={styles.checkHint}>
+                  Manual buys on this symbol stay in the book. Uncheck to let
+                  sells close the full position.
+                </span>
+              </span>
+            </label>
+
             <div className={styles.actionsRow}>
               {isRunning ? (
                 <button
@@ -386,6 +405,14 @@ export default function StrategiesSection() {
                 <dt>Strategy</dt>
                 <dd>
                   {run.strategyName} · {run.symbol} · {run.timeframe}
+                </dd>
+              </div>
+              <div>
+                <dt>Sells</dt>
+                <dd>
+                  {run.protectManualPositions
+                    ? "Strategy size only"
+                    : "Full position"}
                 </dd>
               </div>
               <div>

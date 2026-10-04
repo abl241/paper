@@ -63,6 +63,7 @@ export default function TradeSection() {
   const [ticker, setTicker] = useState<Ticker | null>(null);
   const [tickerLoading, setTickerLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -262,8 +263,41 @@ export default function TradeSection() {
     setAmountMode(nextMode);
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!portfolioId || resolvedQuantity === null || !canSubmit) {
+      return;
+    }
+    setError(null);
+    setMessage(null);
+    setConfirmOpen(true);
+  }
+
+  function closeConfirm() {
+    if (submitting) {
+      return;
+    }
+    setConfirmOpen(false);
+  }
+
+  useEffect(() => {
+    if (!confirmOpen) {
+      return;
+    }
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape" && !submitting) {
+        setConfirmOpen(false);
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [confirmOpen, submitting]);
+
+  async function confirmTrade() {
     if (!portfolioId || resolvedQuantity === null) {
       return;
     }
@@ -281,10 +315,12 @@ export default function TradeSection() {
 
       await refreshAccount(selectedSymbol);
       setAmount("");
+      setConfirmOpen(false);
       setMessage(
         `${side === "buy" ? "Bought" : "Sold"} ${formatQty(result.trade.quantity)} ${asset} at ${formatMoney(result.trade.executionPrice)}. Cash: ${formatMoney(result.cashBalance)}`,
       );
     } catch (err) {
+      setConfirmOpen(false);
       setError(err instanceof Error ? err.message : "Trade failed");
     } finally {
       setSubmitting(false);
@@ -476,11 +512,7 @@ export default function TradeSection() {
             type="submit"
             disabled={!canSubmit}
           >
-            {submitting
-              ? side === "buy"
-                ? "Buying…"
-                : "Selling…"
-              : `${side === "buy" ? "Buy" : "Sell"} ${asset}`}
+            {`${side === "buy" ? "Buy" : "Sell"} ${asset}`}
           </button>
         </form>
       </div>
@@ -515,6 +547,82 @@ export default function TradeSection() {
           for chart and order book.
         </p>
       </aside>
+
+      {confirmOpen && resolvedQuantity !== null && (
+        <div
+          className={styles.modalBackdrop}
+          role="presentation"
+          onClick={closeConfirm}
+        >
+          <div
+            className={styles.modal}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="confirm-trade-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 id="confirm-trade-title">
+              Confirm {side === "buy" ? "buy" : "sell"}
+            </h2>
+            <p className={styles.confirmLead}>
+              Place a paper market order for{" "}
+              <strong>{selectedSymbol}</strong>?
+            </p>
+            <dl className={styles.confirmDetails}>
+              <div>
+                <dt>Side</dt>
+                <dd className={side === "buy" ? styles.buy : styles.sell}>
+                  {side === "buy" ? "Buy" : "Sell"}
+                </dd>
+              </div>
+              <div>
+                <dt>Quantity</dt>
+                <dd>
+                  {formatQty(resolvedQuantity)} {asset}
+                </dd>
+              </div>
+              <div>
+                <dt>Est. {side === "buy" ? "cost" : "proceeds"}</dt>
+                <dd>
+                  {resolvedUsd === null ? "—" : formatMoney(resolvedUsd)}
+                </dd>
+              </div>
+              <div>
+                <dt>Fill at live {side === "buy" ? "ask" : "bid"}</dt>
+                <dd>{formatMoney(fillPrice ?? 0)}</dd>
+              </div>
+            </dl>
+            <p className={styles.confirmHint}>
+              Simulated fill only — no real exchange order is sent.
+            </p>
+            <div className={styles.modalActions}>
+              <button
+                type="button"
+                className={styles.ghostButton}
+                onClick={closeConfirm}
+                disabled={submitting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={
+                  side === "buy" ? styles.buyButton : styles.sellButton
+                }
+                onClick={() => void confirmTrade()}
+                disabled={submitting}
+                autoFocus
+              >
+                {submitting
+                  ? side === "buy"
+                    ? "Buying…"
+                    : "Selling…"
+                  : `Confirm ${side === "buy" ? "buy" : "sell"}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <MarketSearchModal
         open={pickerOpen}

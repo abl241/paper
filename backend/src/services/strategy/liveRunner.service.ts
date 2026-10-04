@@ -21,6 +21,7 @@ import type {
   StrategyRunView,
 } from "../../types/strategyRun.js";
 import { normalizeSymbol } from "../../utils/symbols.js";
+import { roundAmount } from "../../utils/decimal.js";
 import { marketService } from "../market/market.service.js";
 import { portfolioService } from "../portfolio/portfolio.service.js";
 import { resolveBacktestInterval } from "../research/candleInterval.js";
@@ -107,6 +108,7 @@ async function toView(run: StrategyRunRecord): Promise<StrategyRunView> {
     logs: run.logs,
     trades: mapRunTrades(trades),
     stats: trades.length > 0 ? buildStats(trades) : emptyStats(),
+    protectManualPositions: run.protectManualPositions,
     createdAt: run.createdAt.toISOString(),
     updatedAt: run.updatedAt.toISOString(),
   };
@@ -147,6 +149,35 @@ function resolveBuyQty(
     return Math.max(0, (cash * intent.fractionOfCash) / price);
   }
   return Math.max(0, cash / price / 10);
+}
+
+/** Net long quantity attributed to this strategy run (buys − sells). */
+async function netStrategyRunQuantity(
+  runId: string,
+  symbol: string,
+): Promise<number> {
+  const trades = await findTradesByStrategyRunId(runId);
+  let net = 0;
+  for (const trade of trades) {
+    if (trade.symbol !== symbol) continue;
+    net += trade.side === "buy" ? trade.quantity : -trade.quantity;
+  }
+  return Math.max(0, roundAmount(net));
+}
+
+async function strategyRunAverageCost(
+  runId: string,
+  symbol: string,
+): Promise<number> {
+  const trades = await findTradesByStrategyRunId(runId);
+  let qty = 0;
+  let cost = 0;
+  for (const trade of trades) {
+    if (trade.symbol !== symbol || trade.side !== "buy") continue;
+    cost += trade.quantity * trade.executionPrice;
+    qty += trade.quantity;
+  }
+  return qty > 0 ? roundAmount(cost / qty) : 0;
 }
 
 function intervalSeconds(interval: string): number {
@@ -199,6 +230,8 @@ export class LiveRunnerService {
     if (!input.strategyId || typeof input.strategyId !== "string") {
       throw new AppError("strategyId is required", 400, "INVALID_INPUT");
     }
+
+    const protectManualPositions = input.protectManualPositions !== false;
 
     const strategy = await findStrategyForUser(input.strategyId, userId);
     if (!strategy) {
@@ -267,6 +300,12 @@ export class LiveRunnerService {
       `Baseline bar ${lastProcessed.toISOString()} — waiting for new closed bars`,
     ];
     if (note) logs = pushLog(logs, note);
+    logs = pushLog(
+      logs,
+      protectManualPositions
+        ? "Sells are limited to size this strategy buys — manual holdings are left alone"
+        : "Sells may close the full symbol position, including manual buys",
+    );
     if (strategy.validationStatus !== "valid") {
       logs = pushLog(
         logs,
@@ -287,6 +326,7 @@ export class LiveRunnerService {
       lastProcessedBarTime: lastProcessed,
       lastHeartbeatAt: now,
       logs,
+      protectManualPositions,
     });
 
     return await toView(run);
@@ -433,6 +473,7 @@ export class LiveRunnerService {
             fillPrice,
             fillBarTimeSec: bar.time,
             useLivePrice: false,
+            protectManualPositions: run.protectManualPositions,
             logs,
           });
           queue.pending = null;
@@ -445,6 +486,8 @@ export class LiveRunnerService {
           symbol: run.symbol,
           userId,
           portfolioId,
+          runId: run.id,
+          protectManualPositions: run.protectManualPositions,
           queue,
         });
 
@@ -461,6 +504,7 @@ export class LiveRunnerService {
             fillPrice: bar.close,
             fillBarTimeSec: bar.time,
             useLivePrice: true,
+            protectManualPositions: run.protectManualPositions,
             logs,
           });
           queue.pending = null;
@@ -494,6 +538,8 @@ export class LiveRunnerService {
     symbol: string;
     userId: string;
     portfolioId: string;
+    runId: string;
+    protectManualPositions: boolean;
     queue: {
       pending: { side: "buy" | "sell"; intent: OrderIntent } | null;
     };
@@ -505,8 +551,16 @@ export class LiveRunnerService {
     const positions = await findPositionsByPortfolioId(input.portfolioId);
     const position = positions.find((p) => p.symbol === input.symbol);
     const price = input.bars[input.bars.length - 1]?.close ?? 0;
-    const positionSize = position?.quantity ?? 0;
-    const averageCost = position?.averageCost ?? 0;
+    const bookSize = position?.quantity ?? 0;
+    const strategySize = await netStrategyRunQuantity(
+      input.runId,
+      input.symbol,
+    );
+    const visibleSize = input.protectManualPositions ? strategySize : bookSize;
+    const averageCost =
+      input.protectManualPositions && strategySize > 0
+        ? await strategyRunAverageCost(input.runId, input.symbol)
+        : (position?.averageCost ?? 0);
     const cash = portfolio.cashBalance;
     const allMarked =
       cash +
@@ -515,7 +569,7 @@ export class LiveRunnerService {
         return sum + p.quantity * p.averageCost;
       }, 0);
     const unrealizedPnL =
-      positionSize > 0 ? (price - averageCost) * positionSize : 0;
+      visibleSize > 0 ? (price - averageCost) * visibleSize : 0;
     const indicators = createIndicators();
 
     const ctx = {
@@ -524,7 +578,7 @@ export class LiveRunnerService {
       price,
       position: {
         symbol: input.symbol,
-        size: positionSize,
+        size: visibleSize,
         averageCost,
         unrealizedPnL,
       },
@@ -539,7 +593,9 @@ export class LiveRunnerService {
           averageCost: p.averageCost,
           unrealizedPnL:
             p.symbol === input.symbol
-              ? unrealizedPnL
+              ? bookSize > 0 && position
+                ? (price - position.averageCost) * bookSize
+                : 0
               : 0,
         })),
       },
@@ -569,6 +625,7 @@ export class LiveRunnerService {
     /** Unix seconds for the candle this fill belongs to (for chart markers). */
     fillBarTimeSec: number;
     useLivePrice: boolean;
+    protectManualPositions: boolean;
     logs: string[];
   }): Promise<string[]> {
     let logs = input.logs;
@@ -615,15 +672,24 @@ export class LiveRunnerService {
         );
       }
 
-      const qty = Math.min(
+      const runNet = await netStrategyRunQuantity(input.runId, input.symbol);
+      const requestedQty =
         input.pending.intent.quantity !== undefined &&
-          Number.isFinite(input.pending.intent.quantity)
+        Number.isFinite(input.pending.intent.quantity)
           ? input.pending.intent.quantity
-          : positionSize,
-        positionSize,
-      );
+          : input.protectManualPositions
+            ? runNet
+            : positionSize;
+      const qty = input.protectManualPositions
+        ? Math.min(requestedQty, positionSize, runNet)
+        : Math.min(requestedQty, positionSize);
       if (qty <= 0) {
-        return pushLog(logs, "sell skipped — flat");
+        return pushLog(
+          logs,
+          input.protectManualPositions && runNet <= 0
+            ? "sell skipped — strategy flat (won't sell manual holdings)"
+            : "sell skipped — flat",
+        );
       }
       if (input.useLivePrice) {
         await tradingService.executeSell(input.userId, input.portfolioId, {

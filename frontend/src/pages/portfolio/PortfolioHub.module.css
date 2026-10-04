@@ -325,6 +325,31 @@
   margin-top: 0.5rem;
 }
 
+.checkRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  max-width: 36rem;
+  margin: 0 0 0.25rem;
+  color: #0f172a;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.checkRow input {
+  margin-top: 0.2rem;
+}
+
+.checkHint {
+  display: block;
+  margin-top: 0.2rem;
+  color: #64748b;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
 .tradeLayout {
   display: grid;
   grid-template-columns: minmax(0, 22rem) minmax(0, 1fr);
@@ -644,6 +669,51 @@
   justify-content: flex-end;
   gap: 0.5rem;
   margin-top: 1rem;
+}
+
+.confirmLead {
+  margin: 0 0 0.85rem;
+  color: #334155;
+  font-size: 0.9375rem;
+  line-height: 1.45;
+}
+
+.confirmDetails {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0 0 0.85rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  background: #f8fafc;
+}
+
+.confirmDetails > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.confirmDetails dt {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.confirmDetails dd {
+  margin: 0;
+  color: #0f172a;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  text-align: right;
+}
+
+.confirmHint {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.8125rem;
 }
 
 .positive {

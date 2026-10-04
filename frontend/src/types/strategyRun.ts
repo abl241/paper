@@ -47,6 +47,7 @@ export interface StrategyRun {
   logs: string[];
   trades: StrategyRunTrade[];
   stats: StrategyRunStats;
+  protectManualPositions: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -54,6 +55,7 @@ export interface StrategyRun {
 export interface StartStrategyRunInput {
   strategyId: string;
   symbol?: string;
+  protectManualPositions?: boolean;
 }
 
 export interface ApiResponse<T> {
