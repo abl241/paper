@@ -5,7 +5,7 @@ import {
   computeSellFill,
   hasSufficientCash,
   hasSufficientPosition,
-} from "./portfolioMath.js";
+} from "../../src/services/trading/portfolioMath.js";
 
 describe("computeBuyFill", () => {
   it("debits cash and opens a new position", () => {

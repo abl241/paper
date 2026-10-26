@@ -345,7 +345,7 @@ export class LiveRunnerService {
       return latest ? await toView(latest) : null;
     }
 
-    let logs = pushLog(running.logs, "Stopped by user");
+    const logs = pushLog(running.logs, "Stopped by user");
     await updateStrategyRunState(running.id, userId, { logs });
     const stopped = await stopStrategyRun(running.id, userId);
     return stopped ? await toView(stopped) : null;
@@ -628,7 +628,7 @@ export class LiveRunnerService {
     protectManualPositions: boolean;
     logs: string[];
   }): Promise<string[]> {
-    let logs = input.logs;
+    const logs = input.logs;
     const portfolio = await portfolioService.requireOwnedPortfolio(
       input.userId,
       input.portfolioId,
