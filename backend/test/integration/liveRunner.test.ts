@@ -91,7 +91,8 @@ describe("liveRunnerService", () => {
 
     const view = await liveRunnerService.heartbeat(account.userId, account.portfolioId);
     assert.ok(view);
-    const trades = [...view.trades].sort((a, b) => a.executedAt.localeCompare(b.executedAt));
+    // Newest first, tie-broken by insertion order; both fills share bar 31's timestamp.
+    const trades = [...view.trades].reverse();
 
     assert.equal(trades.length, 2, view.logs.join("\n"));
     const [buy, sell] = trades;
@@ -174,10 +175,7 @@ describe("liveRunnerService", () => {
     assert.equal(view?.trades.length, 0);
   });
 
-  it(
-    "concurrent heartbeats process each bar once",
-    { todo: "Phase 1: lock the strategy_runs row during tick" },
-    async () => {
+  it("concurrent heartbeats process each bar once", async () => {
       // Not gated on position size, so a bar evaluated twice produces two fills.
       const strategy = await createTestStrategy(
         account.userId,
@@ -199,6 +197,69 @@ describe("liveRunnerService", () => {
 
       const view = await liveRunnerService.getActive(account.userId, account.portfolioId);
       assert.equal(view?.trades.length, 1);
-    },
-  );
+  });
+
+  it("an error mid-tick rolls back every fill from that tick", async () => {
+    const strategy = await createTestStrategy(
+      account.userId,
+      `export default function strategy(ctx: StrategyContext) {
+        const bar = ctx.bars[ctx.bars.length - 1];
+        if (ctx.bars.length === 32) throw new Error("bar 31 exploded");
+        if (bar.close > bar.open && ctx.position.size === 0) ctx.buy({ quantity: 1 });
+      }`,
+    );
+    await liveRunnerService.start(account.userId, account.portfolioId, {
+      strategyId: strategy.id,
+      symbol: SYMBOL,
+    });
+    // Bar 30 queues a buy, bar 31 fills it at its open and then throws.
+    exchange.appendBars(SYMBOL, INTERVAL, [green(times[30]), flat(times[31]), flat(times[32])]);
+
+    const view = await liveRunnerService.heartbeat(account.userId, account.portfolioId);
+    assert.equal(view?.lastError, "bar 31 exploded");
+    assert.equal(view?.trades.length, 0);
+    assert.equal(view?.lastProcessedBarTime, new Date(times[ARM_INDEX] * 1000).toISOString());
+    assert.deepEqual(await findPositionsByPortfolioId(account.portfolioId), []);
+    assert.ok(view?.logs.some((l) => l.includes("Error: bar 31 exploded")));
+  });
+
+  it("a runaway strategy is stopped by the sandbox and recorded as an error", async () => {
+    const strategy = await createTestStrategy(
+      account.userId,
+      `export default function strategy(ctx: StrategyContext) { while (true) {} }`,
+    );
+    await liveRunnerService.start(account.userId, account.portfolioId, {
+      strategyId: strategy.id,
+      symbol: SYMBOL,
+    });
+    exchange.appendBars(SYMBOL, INTERVAL, [flat(times[30])]);
+
+    const view = await liveRunnerService.heartbeat(account.userId, account.portfolioId);
+    assert.match(view?.lastError ?? "", /time limit/);
+  });
+
+  it("fractionOfEquity sizes against cash plus every holding", async () => {
+    exchange.setTicker("ETH-USD", { bid: 1_000, ask: 1_000 });
+    await tradingService.executeBuy(account.userId, account.portfolioId, {
+      symbol: "ETH-USD",
+      quantity: 10,
+    });
+    // Cash 90k + ETH 10k at cost = 100k equity → half is 50k → 500 BTC at the 100 open.
+    const strategy = await createTestStrategy(
+      account.userId,
+      `export default function strategy(ctx: StrategyContext) {
+        const bar = ctx.bars[ctx.bars.length - 1];
+        if (bar.close > bar.open && ctx.position.size === 0) ctx.buy({ fractionOfEquity: 0.5 });
+      }`,
+    );
+    await liveRunnerService.start(account.userId, account.portfolioId, {
+      strategyId: strategy.id,
+      symbol: SYMBOL,
+    });
+    exchange.appendBars(SYMBOL, INTERVAL, [green(times[30]), flat(times[31], 100)]);
+
+    const view = await liveRunnerService.heartbeat(account.userId, account.portfolioId);
+    assert.equal(view?.trades.length, 1, view?.logs.join("\n"));
+    assert.equal(view?.trades[0].quantity, 500);
+  });
 });

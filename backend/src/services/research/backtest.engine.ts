@@ -1,10 +1,11 @@
 import type {
-  StrategyBar,
-  StrategyFn,
-  StrategyParams,
   OrderIntent,
+  SandboxedStrategy,
+  StrategyBar,
+  StrategyParams,
 } from "../strategy/runtime.js";
-import { createIndicators } from "../strategy/runtime.js";
+import { StrategySandboxError } from "../strategy/sandbox.js";
+import { markEquity as markHoldings, resolveBuyQty } from "../strategy/sizing.js";
 
 export interface BacktestTrade {
   time: string;
@@ -30,7 +31,7 @@ export interface BacktestStats {
 }
 
 export interface BacktestEngineInput {
-  strategy: StrategyFn;
+  strategy: SandboxedStrategy;
   params: StrategyParams;
   bars: StrategyBar[];
   symbol: string;
@@ -47,6 +48,8 @@ export interface BacktestEngineResult {
 }
 
 const MAX_EQUITY_POINTS = 500;
+/** Wall-clock cap for a whole backtest, on top of the sandbox's per-bar limit. */
+const BACKTEST_TIME_BUDGET_MS = 15_000;
 
 function downsampleEquity(
   points: BacktestEquityPoint[],
@@ -62,30 +65,6 @@ function downsampleEquity(
     sampled.push(last);
   }
   return sampled;
-}
-
-function resolveBuyQty(
-  intent: OrderIntent,
-  cash: number,
-  equity: number,
-  price: number,
-): number {
-  if (intent.quantity !== undefined && Number.isFinite(intent.quantity)) {
-    return Math.max(0, intent.quantity);
-  }
-  if (
-    intent.fractionOfEquity !== undefined &&
-    Number.isFinite(intent.fractionOfEquity)
-  ) {
-    return Math.max(0, (equity * intent.fractionOfEquity) / price);
-  }
-  if (
-    intent.fractionOfCash !== undefined &&
-    Number.isFinite(intent.fractionOfCash)
-  ) {
-    return Math.max(0, (cash * intent.fractionOfCash) / price);
-  }
-  return Math.max(0, cash / price / 10);
 }
 
 export function runBacktest(input: BacktestEngineInput): BacktestEngineResult {
@@ -125,7 +104,6 @@ export function runBacktest(input: BacktestEngineInput): BacktestEngineResult {
   const trades: BacktestTrade[] = [];
   const equityCurve: BacktestEquityPoint[] = [];
   const logs: string[] = [];
-  const indicators = createIndicators();
   const feeRate = Math.max(0, feeBps) / 10_000;
 
   const pushLog = (message: string) => {
@@ -139,10 +117,22 @@ export function runBacktest(input: BacktestEngineInput): BacktestEngineResult {
   let closedWins = 0;
   let closedTrades = 0;
 
-  const markEquity = (price: number) => cash + positionSize * price;
+  const markEquity = (price: number) =>
+    markHoldings(
+      cash,
+      positionSize > 0 ? [{ symbol, quantity: positionSize, averageCost }] : [],
+      symbol,
+      price,
+    );
+  const startedAt = Date.now();
 
   for (let i = 0; i < bars.length; i += 1) {
     const bar = bars[i];
+    if (Date.now() - startedAt > BACKTEST_TIME_BUDGET_MS) {
+      throw new StrategySandboxError(
+        `Backtest exceeded its ${BACKTEST_TIME_BUDGET_MS / 1000}s time budget at bar ${i} of ${bars.length}`,
+      );
+    }
 
     // Fill orders queued on the previous bar at this bar's open.
     const toFill = i > 0 ? queue.pending : null;
@@ -219,7 +209,6 @@ export function runBacktest(input: BacktestEngineInput): BacktestEngineResult {
     const unrealizedPnL =
       positionSize > 0 ? (price - averageCost) * positionSize : 0;
 
-    const slice = bars.slice(0, i + 1);
     const position = {
       symbol,
       size: positionSize,
@@ -227,32 +216,34 @@ export function runBacktest(input: BacktestEngineInput): BacktestEngineResult {
       unrealizedPnL,
     };
 
-    const ctx = {
-      symbol,
-      bars: slice,
-      price,
-      position,
-      cash,
-      equity,
-      portfolio: {
+    strategy.evaluate(
+      {
+        symbol,
+        bars,
+        barCount: i + 1,
+        price,
+        position,
         cash,
         equity,
-        positions: positionSize > 0 ? [position] : [],
+        portfolio: {
+          cash,
+          equity,
+          positions: positionSize > 0 ? [position] : [],
+        },
+        params,
       },
-      params,
-      buy(order: OrderIntent = {}) {
-        queue.pending = { side: "buy", intent: order };
+      {
+        buy(order) {
+          queue.pending = { side: "buy", intent: order };
+        },
+        sell(order) {
+          queue.pending = { side: "sell", intent: order };
+        },
+        log(message) {
+          pushLog(message);
+        },
       },
-      sell(order: OrderIntent = {}) {
-        queue.pending = { side: "sell", intent: order };
-      },
-      indicator: indicators,
-      log(message: string) {
-        pushLog(String(message));
-      },
-    };
-
-    strategy(ctx);
+    );
 
     const marked = markEquity(price);
     if (marked > peakEquity) peakEquity = marked;

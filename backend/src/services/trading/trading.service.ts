@@ -1,5 +1,5 @@
 import type { PoolClient } from "pg";
-import { pool } from "../../config/database.js";
+import { withTransaction } from "../../config/database.js";
 import {
   findPortfolioForUpdate,
   updatePortfolioCash,
@@ -32,32 +32,36 @@ export class TradingService {
     userId: string,
     portfolioId: string,
     input: ExecuteOrderInput,
+    client?: PoolClient,
   ): Promise<TradeExecutionResult> {
-    return this.executeOrder(userId, portfolioId, input, "buy");
+    return this.executeOrder(userId, portfolioId, input, "buy", undefined, client);
   }
 
   async executeSell(
     userId: string,
     portfolioId: string,
     input: ExecuteOrderInput,
+    client?: PoolClient,
   ): Promise<TradeExecutionResult> {
-    return this.executeOrder(userId, portfolioId, input, "sell");
+    return this.executeOrder(userId, portfolioId, input, "sell", undefined, client);
   }
 
   async executeBuyAtPrice(
     userId: string,
     portfolioId: string,
     input: ExecuteOrderAtPriceInput,
+    client?: PoolClient,
   ): Promise<TradeExecutionResult> {
-    return this.executeOrder(userId, portfolioId, input, "buy", input.price);
+    return this.executeOrder(userId, portfolioId, input, "buy", input.price, client);
   }
 
   async executeSellAtPrice(
     userId: string,
     portfolioId: string,
     input: ExecuteOrderAtPriceInput,
+    client?: PoolClient,
   ): Promise<TradeExecutionResult> {
-    return this.executeOrder(userId, portfolioId, input, "sell", input.price);
+    return this.executeOrder(userId, portfolioId, input, "sell", input.price, client);
   }
 
   private async executeOrder(
@@ -66,6 +70,8 @@ export class TradingService {
     input: ExecuteOrderInput,
     side: "buy" | "sell",
     priceOverride?: number,
+    /** Join an existing transaction (nested via savepoint) instead of opening one. */
+    outerClient?: PoolClient,
   ): Promise<TradeExecutionResult> {
     const symbol = this.parseSymbol(input.symbol);
     const quantity = this.parseQuantity(input.quantity);
@@ -73,6 +79,8 @@ export class TradingService {
     const portfolio = await portfolioService.requireOwnedPortfolio(
       userId,
       portfolioId,
+      {},
+      outerClient,
     );
 
     let executionPrice: number;
@@ -94,11 +102,7 @@ export class TradingService {
           : roundAmount(ticker.bid || ticker.last);
     }
 
-    const client = await pool.connect();
-
-    try {
-      await client.query("BEGIN");
-
+    return withTransaction(async (client) => {
       const locked = await findPortfolioForUpdate(client, portfolioId);
       if (!locked) {
         throw new AppError("Portfolio not found", 404, "PORTFOLIO_NOT_FOUND");
@@ -107,21 +111,7 @@ export class TradingService {
         throw new AppError("Portfolio is archived", 400, "PORTFOLIO_ARCHIVED");
       }
 
-      if (side === "buy") {
-        const result = await this.processBuy(client, {
-          portfolioId,
-          symbol,
-          quantity,
-          executionPrice,
-          cashBalance: locked.cashBalance,
-          strategyRunId: input.strategyRunId ?? null,
-          executedAt: input.executedAt,
-        });
-        await client.query("COMMIT");
-        return result;
-      }
-
-      const result = await this.processSell(client, {
+      const fill = {
         portfolioId,
         symbol,
         quantity,
@@ -129,15 +119,11 @@ export class TradingService {
         cashBalance: locked.cashBalance,
         strategyRunId: input.strategyRunId ?? null,
         executedAt: input.executedAt,
-      });
-      await client.query("COMMIT");
-      return result;
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
-    }
+      };
+      return side === "buy"
+        ? this.processBuy(client, fill)
+        : this.processSell(client, fill);
+    }, outerClient);
   }
 
   private async processBuy(

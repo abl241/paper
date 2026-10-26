@@ -1,5 +1,5 @@
 import type { PoolClient } from "pg";
-import { pool } from "../config/database.js";
+import { pool, type Queryable } from "../config/database.js";
 import type {
   PreferredExchange,
   PortfolioRecord,
@@ -68,8 +68,9 @@ export async function findPortfolioById(
 export async function findPortfolioForUser(
   portfolioId: string,
   userId: string,
+  db: Queryable = pool,
 ): Promise<PortfolioRecord | null> {
-  const result = await pool.query<PortfolioRow>(
+  const result = await db.query<PortfolioRow>(
     `SELECT ${PORTFOLIO_SELECT}
      FROM portfolios
      WHERE id = $1 AND user_id = $2`,
@@ -80,8 +81,9 @@ export async function findPortfolioForUser(
 
 export async function findDefaultPortfolio(
   userId: string,
+  db: Queryable = pool,
 ): Promise<PortfolioRecord | null> {
-  const result = await pool.query<PortfolioRow>(
+  const result = await db.query<PortfolioRow>(
     `SELECT ${PORTFOLIO_SELECT}
      FROM portfolios
      WHERE user_id = $1 AND archived_at IS NULL
@@ -98,8 +100,8 @@ export async function createPortfolio(input: {
   startingCash: number;
   exchange?: PreferredExchange | null;
   isDefault?: boolean;
-}): Promise<PortfolioRecord> {
-  const result = await pool.query<PortfolioRow>(
+}, db: Queryable = pool): Promise<PortfolioRecord> {
+  const result = await db.query<PortfolioRow>(
     `INSERT INTO portfolios (user_id, name, starting_cash, cash_balance, exchange, is_default)
      VALUES ($1, $2, $3, $3, $4, $5)
      RETURNING ${PORTFOLIO_SELECT}`,

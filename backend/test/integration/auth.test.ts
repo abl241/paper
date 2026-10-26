@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { pool } from "../../src/config/database.js";
 import { authService } from "../../src/services/auth/auth.service.js";
+import { settingsService } from "../../src/services/settings/settings.service.js";
 import type { RegisterInput } from "../../src/types/auth.js";
 import { useTestDatabase } from "../helpers/db.js";
 
@@ -79,22 +80,40 @@ describe("authService", () => {
     });
   });
 
-  it(
-    "concurrent duplicate registrations: one succeeds, the other gets 409",
-    { todo: "Phase 1: unique violation surfaces as a raw pg error (500)" },
-    async () => {
-      const results = await Promise.allSettled([
-        authService.register(alice),
-        authService.register(alice),
-      ]);
-      const rejected = results.filter((r) => r.status === "rejected");
-      assert.equal(rejected.length, 1);
-      assert.equal(
-        (rejected[0] as PromiseRejectedResult).reason.statusCode,
-        409,
-      );
-    },
-  );
+  it("concurrent duplicate registrations: one succeeds, the other gets 409", async () => {
+    const results = await Promise.allSettled([
+      authService.register(alice),
+      authService.register(alice),
+    ]);
+    const rejected = results.filter((r) => r.status === "rejected");
+    assert.equal(rejected.length, 1);
+    assert.equal((rejected[0] as PromiseRejectedResult).reason.statusCode, 409);
+
+    const users = await pool.query("SELECT id FROM users");
+    assert.equal(users.rowCount, 1);
+    assert.equal(await countRows("portfolios", users.rows[0].id), 1);
+  });
+
+  it("registration is atomic: a failure after creating the user leaves nothing behind", async () => {
+    const original = settingsService.initialize;
+    settingsService.initialize = async () => {
+      throw new Error("settings unavailable");
+    };
+    try {
+      await assert.rejects(authService.register(alice), /settings unavailable/);
+    } finally {
+      settingsService.initialize = original;
+    }
+
+    const users = await pool.query("SELECT id FROM users");
+    assert.equal(users.rowCount, 0);
+    const portfolios = await pool.query("SELECT id FROM portfolios");
+    assert.equal(portfolios.rowCount, 0);
+
+    // And the same identity can register cleanly afterwards.
+    const { user } = await authService.register(alice);
+    assert.equal(user.email, "alice@example.com");
+  });
 
   it(
     "missing password is a 400, not a crash",

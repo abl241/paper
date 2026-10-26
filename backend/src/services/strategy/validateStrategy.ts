@@ -5,54 +5,40 @@ import type {
 import {
   buildMockBars,
   compileStrategy,
-  createIndicators,
+  type StrategyEffects,
   type StrategyParams,
+  type StrategySnapshot,
 } from "./runtime.js";
+import { resolveBuyQty } from "./sizing.js";
 
-function createMockContext(logs: string[], params: StrategyParams) {
+const DRY_RUN_TIMEOUT_MS = 1_000;
+
+/** One evaluation on synthetic bars; buy/sell only update a local mock book and log. */
+function dryRun(
+  logs: string[],
+  params: StrategyParams,
+): { snapshot: StrategySnapshot; effects: StrategyEffects } {
   const bars = buildMockBars(40);
-  let positionSize = 0;
-  let cash = 100_000;
   const symbol = "BTC-USD";
   const price = bars[bars.length - 1].close;
-  const indicators = createIndicators();
+  let cash = 100_000;
+  let positionSize = 0;
 
-  const position = {
-    symbol,
-    get size() {
-      return positionSize;
-    },
-    averageCost: price,
-    unrealizedPnL: 0,
-  };
-
-  return {
+  const snapshot: StrategySnapshot = {
     symbol,
     bars,
+    barCount: bars.length,
     price,
-    position,
+    position: { symbol, size: 0, averageCost: price, unrealizedPnL: 0 },
     cash,
     equity: cash,
-    portfolio: {
-      cash,
-      equity: cash,
-      positions: [],
-    },
+    portfolio: { cash, equity: cash, positions: [] },
     params,
-    buy(order?: {
-      quantity?: number;
-      fractionOfEquity?: number;
-      fractionOfCash?: number;
-    }) {
-      const qty =
-        order?.quantity ??
-        (order?.fractionOfEquity
-          ? (cash * order.fractionOfEquity) / price
-          : undefined) ??
-        (order?.fractionOfCash
-          ? (cash * order.fractionOfCash) / price
-          : undefined) ??
-        cash / price / 10;
+  };
+
+  const effects: StrategyEffects = {
+    buy(order) {
+      const qty = resolveBuyQty(order, cash, cash, price);
       const cost = qty * price;
       if (cost > cash) {
         logs.push(`buy skipped — insufficient cash for ${qty.toFixed(6)}`);
@@ -62,8 +48,8 @@ function createMockContext(logs: string[], params: StrategyParams) {
       positionSize += qty;
       logs.push(`buy ${qty.toFixed(6)} ${symbol} @ ${price.toFixed(2)}`);
     },
-    sell(order?: { quantity?: number }) {
-      const qty = order?.quantity ?? positionSize;
+    sell(order) {
+      const qty = order.quantity ?? positionSize;
       if (qty <= 0 || positionSize <= 0) {
         logs.push("sell skipped — flat");
         return;
@@ -73,11 +59,12 @@ function createMockContext(logs: string[], params: StrategyParams) {
       positionSize -= fill;
       logs.push(`sell ${fill.toFixed(6)} ${symbol} @ ${price.toFixed(2)}`);
     },
-    indicator: indicators,
-    log(message: string) {
-      logs.push(String(message));
+    log(message) {
+      logs.push(message);
     },
   };
+
+  return { snapshot, effects };
 }
 
 export function validateStrategyCode(
@@ -95,8 +82,8 @@ export function validateStrategyCode(
   messages.push(...compiled.warnings);
 
   try {
-    const ctx = createMockContext(logs, params);
-    compiled.strategy(ctx);
+    const { snapshot, effects } = dryRun(logs, params);
+    compiled.strategy.evaluate(snapshot, effects, DRY_RUN_TIMEOUT_MS);
     messages.push({
       level: "info",
       message: "Dry-run completed on synthetic bars",
@@ -109,6 +96,8 @@ export function validateStrategyCode(
       message: `Dry-run failed: ${detail}`,
     });
     return { status: "invalid", messages, logs };
+  } finally {
+    compiled.strategy.dispose();
   }
 
   return {

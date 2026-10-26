@@ -176,54 +176,84 @@ export class ResearchService {
 
     notes.push(...compiled.warnings.map((w) => w.message));
 
-    let candles;
     try {
-      candles = await marketService.getCandles(symbol, interval, exchange);
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to fetch candles";
-      throw new AppError(message, 400, "CANDLE_FETCH_FAILED");
-    }
 
-    const sorted = [...candles].sort(
-      (a, b) => a.timestamp.getTime() - b.timestamp.getTime(),
-    );
-    const bars = filterBarsByRange(
-      sorted.map((candle) => ({
-        time: Math.floor(candle.timestamp.getTime() / 1000),
-        open: candle.open,
-        high: candle.high,
-        low: candle.low,
-        close: candle.close,
-        volume: candle.volume,
-      })),
-      range,
-    );
+      let candles;
+      try {
+        candles = await marketService.getCandles(symbol, interval, exchange);
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Failed to fetch candles";
+        throw new AppError(message, 400, "CANDLE_FETCH_FAILED");
+      }
 
-    if (bars.length < 2) {
-      throw new AppError(
-        "Not enough candle data for this symbol/timeframe/range",
-        400,
-        "INSUFFICIENT_CANDLES",
+      const sorted = [...candles].sort(
+        (a, b) => a.timestamp.getTime() - b.timestamp.getTime(),
       );
-    }
+      const bars = filterBarsByRange(
+        sorted.map((candle) => ({
+          time: Math.floor(candle.timestamp.getTime() / 1000),
+          open: candle.open,
+          high: candle.high,
+          low: candle.low,
+          close: candle.close,
+          volume: candle.volume,
+        })),
+        range,
+      );
 
-    notes.push(`Loaded ${bars.length} bars (${interval})`);
+      if (bars.length < 2) {
+        throw new AppError(
+          "Not enough candle data for this symbol/timeframe/range",
+          400,
+          "INSUFFICIENT_CANDLES",
+        );
+      }
 
-    let result;
-    try {
-      result = runBacktest({
-        strategy: compiled.strategy,
-        params: strategy.params,
-        bars,
-        symbol,
-        startingCapital: strategy.startingCapital,
-        feeBps,
-      });
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Backtest runtime error";
-      const failed = await insertBacktest({
+      notes.push(`Loaded ${bars.length} bars (${interval})`);
+
+      let result;
+      try {
+        result = runBacktest({
+          strategy: compiled.strategy,
+          params: strategy.params,
+          bars,
+          symbol,
+          startingCapital: strategy.startingCapital,
+          feeBps,
+        });
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Backtest runtime error";
+        const failed = await insertBacktest({
+          userId,
+          strategyId: strategy.id,
+          strategyName: strategy.name,
+          symbol,
+          timeframe: strategy.timeframe,
+          exchange,
+          rangeLabel: range,
+          startingCapital: strategy.startingCapital,
+          feeBps,
+          status: "failed",
+          stats: {
+            totalReturnPct: 0,
+            maxDrawdownPct: 0,
+            tradeCount: 0,
+            winRate: 0,
+            endingEquity: strategy.startingCapital,
+            startingCapital: strategy.startingCapital,
+          },
+          equityCurve: [],
+          trades: [],
+          logs: [],
+          notes,
+          error: message,
+        });
+        return toDetail(failed);
+      }
+
+      const saved = await insertBacktest({
         userId,
         strategyId: strategy.id,
         strategyName: strategy.name,
@@ -233,44 +263,20 @@ export class ResearchService {
         rangeLabel: range,
         startingCapital: strategy.startingCapital,
         feeBps,
-        status: "failed",
-        stats: {
-          totalReturnPct: 0,
-          maxDrawdownPct: 0,
-          tradeCount: 0,
-          winRate: 0,
-          endingEquity: strategy.startingCapital,
-          startingCapital: strategy.startingCapital,
-        },
-        equityCurve: [],
-        trades: [],
-        logs: [],
+        status: "completed",
+        stats: result.stats,
+        equityCurve: result.equityCurve,
+        trades: result.trades,
+        logs: result.logs,
         notes,
-        error: message,
+        error: null,
       });
-      return toDetail(failed);
+
+      return toDetail(saved);
+    } finally {
+      // The isolate holds its own V8 heap; free it on every path.
+      compiled.strategy.dispose();
     }
-
-    const saved = await insertBacktest({
-      userId,
-      strategyId: strategy.id,
-      strategyName: strategy.name,
-      symbol,
-      timeframe: strategy.timeframe,
-      exchange,
-      rangeLabel: range,
-      startingCapital: strategy.startingCapital,
-      feeBps,
-      status: "completed",
-      stats: result.stats,
-      equityCurve: result.equityCurve,
-      trades: result.trades,
-      logs: result.logs,
-      notes,
-      error: null,
-    });
-
-    return toDetail(saved);
   }
 }
 

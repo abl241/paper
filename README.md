@@ -152,6 +152,8 @@ npm run dev                     # API on :3001, UI on :5173
 
 Vite reads env from the repo root (see `frontend/vite.config.ts`). Migrations apply automatically when the backend starts.
 
+The strategy sandbox (`isolated-vm`) requires Node to run with `--no-node-snapshot`; the `dev`, `start` and test scripts already pass it, so start the backend through them rather than `node dist/index.js` directly.
+
 ### Tests and checks
 
 Integration tests need a Postgres database whose name ends in `_test` (the suite truncates every table). By default they use `postgresql://paper:paper@localhost:5433/paper_test`, which `docker compose up -d` provides. To use another server, set `TEST_DATABASE_URL`.
@@ -175,7 +177,7 @@ Some design choices worth knowing:
 2. **Portfolios own state.** Cash, positions, and trades hang off `portfolio_id`, so strategies stay isolated. Live paper runs attach one strategy per portfolio and fill through the same book.
 3. **Paper is still strict.** Fills use bid/ask, validate quantity, and reject insufficient cash or size.
 4. **Quiet streams.** Reference-counted upstream subscriptions keep the wire quiet when nobody is watching.
-5. **Strategy API sandbox.** Lab strategies talk only to `StrategyContext` (no imports/`fetch`). Research and live paper runs reuse that same surface.
+5. **Strategy API sandbox.** Lab strategies talk only to `StrategyContext`. Code is transpiled with esbuild and runs in an `isolated-vm` isolate (separate V8 heap, 32 MB cap, per-call CPU timeout), so it cannot reach Node or the host. Research and live paper runs reuse that same surface.
 
 ---
 

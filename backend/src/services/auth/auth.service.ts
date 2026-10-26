@@ -1,5 +1,6 @@
 import bcrypt from "bcrypt";
 import jwt, { type SignOptions } from "jsonwebtoken";
+import { isUniqueViolation, withTransaction } from "../../config/database.js";
 import { config } from "../../config/index.js";
 import {
   createUser,
@@ -78,9 +79,25 @@ export class AuthService {
     }
 
     const passwordHash = await bcrypt.hash(input.password, 12);
-    const user = await createUser({ username, email, passwordHash });
-    await portfolioService.initializeAccount(user.id);
-    await settingsService.initialize(user.id);
+    // User, default portfolio and settings land together or not at all. The checks above
+    // are a fast path; the unique constraints decide races between concurrent sign-ups.
+    let user: User;
+    try {
+      user = await withTransaction(async (client) => {
+        const created = await createUser({ username, email, passwordHash }, client);
+        await portfolioService.ensureDefaultPortfolio(created.id, client);
+        await settingsService.initialize(created.id, client);
+        return created;
+      });
+    } catch (error) {
+      if (isUniqueViolation(error, "users_email_key")) {
+        throw new AppError("Email is already registered", 409, "EMAIL_EXISTS");
+      }
+      if (isUniqueViolation(error, "users_username_key")) {
+        throw new AppError("Username is already taken", 409, "USERNAME_EXISTS");
+      }
+      throw error;
+    }
 
     return {
       token: createToken(user),

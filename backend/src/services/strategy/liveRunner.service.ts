@@ -1,6 +1,9 @@
+import type { PoolClient } from "pg";
+import { withTransaction } from "../../config/database.js";
 import {
   findLatestStrategyRun,
   findRunningStrategyRun,
+  findStrategyRunForUpdate,
   insertStrategyRun,
   stopRunningStrategyRunForPortfolio,
   stopStrategyRun,
@@ -12,6 +15,7 @@ import { findTradesByStrategyRunId } from "../../models/trade.model.js";
 import { AppError } from "../../types/api.js";
 import type { Trade } from "../../types/portfolio.js";
 import type { PreferredExchange } from "../../types/settings.js";
+import type { StrategyRecord } from "../../types/strategy.js";
 import type {
   StartStrategyRunInput,
   StrategyRunPresence,
@@ -21,22 +25,22 @@ import type {
   StrategyRunView,
 } from "../../types/strategyRun.js";
 import { normalizeSymbol } from "../../utils/symbols.js";
-import { roundAmount } from "../../utils/decimal.js";
 import { marketService } from "../market/market.service.js";
 import { portfolioService } from "../portfolio/portfolio.service.js";
 import { resolveBacktestInterval } from "../research/candleInterval.js";
 import { tradingService } from "../trading/trading.service.js";
 import {
   compileStrategy,
-  createIndicators,
   type OrderIntent,
+  type SandboxedStrategy,
   type StrategyBar,
-  type StrategyFn,
   type StrategyParams,
 } from "./runtime.js";
+import { markEquity, resolveBuyQty, runPosition } from "./sizing.js";
 
 const HEARTBEAT_STALE_MS = 2 * 60 * 1000;
 const MAX_LOGS = 200;
+const MAX_CACHED_STRATEGIES = 50;
 const INTERVAL_SECONDS: Record<string, number> = {
   "1m": 60,
   "5m": 300,
@@ -46,6 +50,8 @@ const INTERVAL_SECONDS: Record<string, number> = {
   "6h": 21_600,
   "1d": 86_400,
 };
+
+type PendingOrder = { side: "buy" | "sell"; intent: OrderIntent };
 
 function emptyStats(): StrategyRunStats {
   return {
@@ -127,57 +133,14 @@ function pushLog(logs: string[], message: string): string[] {
   return next.slice(next.length - MAX_LOGS);
 }
 
-function resolveBuyQty(
-  intent: OrderIntent,
-  cash: number,
-  equity: number,
-  price: number,
-): number {
-  if (intent.quantity !== undefined && Number.isFinite(intent.quantity)) {
-    return Math.max(0, intent.quantity);
-  }
-  if (
-    intent.fractionOfEquity !== undefined &&
-    Number.isFinite(intent.fractionOfEquity)
-  ) {
-    return Math.max(0, (equity * intent.fractionOfEquity) / price);
-  }
-  if (
-    intent.fractionOfCash !== undefined &&
-    Number.isFinite(intent.fractionOfCash)
-  ) {
-    return Math.max(0, (cash * intent.fractionOfCash) / price);
-  }
-  return Math.max(0, cash / price / 10);
-}
-
-/** Net long quantity attributed to this strategy run (buys − sells). */
-async function netStrategyRunQuantity(
+/** This run's own net size and cost basis for `symbol`, read inside the tick's transaction. */
+async function strategyRunHolding(
+  client: PoolClient,
   runId: string,
   symbol: string,
-): Promise<number> {
-  const trades = await findTradesByStrategyRunId(runId);
-  let net = 0;
-  for (const trade of trades) {
-    if (trade.symbol !== symbol) continue;
-    net += trade.side === "buy" ? trade.quantity : -trade.quantity;
-  }
-  return Math.max(0, roundAmount(net));
-}
-
-async function strategyRunAverageCost(
-  runId: string,
-  symbol: string,
-): Promise<number> {
-  const trades = await findTradesByStrategyRunId(runId);
-  let qty = 0;
-  let cost = 0;
-  for (const trade of trades) {
-    if (trade.symbol !== symbol || trade.side !== "buy") continue;
-    cost += trade.quantity * trade.executionPrice;
-    qty += trade.quantity;
-  }
-  return qty > 0 ? roundAmount(cost / qty) : 0;
+): Promise<{ quantity: number; averageCost: number }> {
+  const newestFirst = await findTradesByStrategyRunId(runId, client);
+  return runPosition([...newestFirst].reverse(), symbol);
 }
 
 function intervalSeconds(interval: string): number {
@@ -203,7 +166,54 @@ function candlesToBars(
     }));
 }
 
+/** Compiled isolates per strategy version, so ticks don't re-create a V8 heap every heartbeat. */
+class StrategyCache {
+  private readonly entries = new Map<
+    string,
+    { updatedAt: number; strategy: SandboxedStrategy }
+  >();
+
+  /** Throws AppError(STRATEGY_COMPILE_FAILED) when the source does not compile. */
+  get(record: StrategyRecord): SandboxedStrategy {
+    const updatedAt = record.updatedAt.getTime();
+    const cached = this.entries.get(record.id);
+    if (cached && cached.updatedAt === updatedAt && !cached.strategy.disposed) {
+      // Refresh recency.
+      this.entries.delete(record.id);
+      this.entries.set(record.id, cached);
+      return cached.strategy;
+    }
+    if (cached) {
+      cached.strategy.dispose();
+      this.entries.delete(record.id);
+    }
+
+    const compiled = compileStrategy(record.sourceCode);
+    if (!compiled.ok) {
+      const detail = compiled.messages
+        .filter((m) => m.level === "error")
+        .map((m) => m.message)
+        .join("; ");
+      throw new AppError(
+        detail || "Strategy compile failed",
+        400,
+        "STRATEGY_COMPILE_FAILED",
+      );
+    }
+
+    this.entries.set(record.id, { updatedAt, strategy: compiled.strategy });
+    while (this.entries.size > MAX_CACHED_STRATEGIES) {
+      const [oldestId, oldest] = this.entries.entries().next().value!;
+      oldest.strategy.dispose();
+      this.entries.delete(oldestId);
+    }
+    return compiled.strategy;
+  }
+}
+
 export class LiveRunnerService {
+  private readonly strategies = new StrategyCache();
+
   async getActive(
     userId: string,
     portfolioId: string,
@@ -257,18 +267,8 @@ export class LiveRunnerService {
       exchange,
     );
 
-    const compiled = compileStrategy(strategy.sourceCode);
-    if (!compiled.ok) {
-      const detail = compiled.messages
-        .filter((m) => m.level === "error")
-        .map((m) => m.message)
-        .join("; ");
-      throw new AppError(
-        detail || "Strategy compile failed",
-        400,
-        "STRATEGY_COMPILE_FAILED",
-      );
-    }
+    // Fail fast on code that will never run.
+    this.strategies.get(strategy);
 
     let candles;
     try {
@@ -374,6 +374,11 @@ export class LiveRunnerService {
   /**
    * Process new closed bars while presence is fresh.
    * Catch-up fills use next-bar open; trailing live signal uses live ask/bid.
+   *
+   * Network reads (strategy, candles) happen first. Bar processing then runs in one
+   * transaction holding the run row lock: concurrent ticks for the same run serialise,
+   * re-read `last_processed_bar_time`, and never fill a bar twice. If anything throws,
+   * every fill from this tick rolls back and the error is recorded on the run.
    */
   async tick(
     userId: string,
@@ -390,7 +395,6 @@ export class LiveRunnerService {
       return await toView(run);
     }
 
-    let logs = [...run.logs];
     try {
       const strategy = await findStrategyForUser(run.strategyId, userId);
       if (!strategy) {
@@ -407,220 +411,241 @@ export class LiveRunnerService {
       )) as PreferredExchange;
 
       const { interval } = resolveBacktestInterval(strategy.timeframe, exchange);
-      const compiled = compileStrategy(strategy.sourceCode);
-      if (!compiled.ok) {
-        throw new AppError(
-          "Strategy compile failed during tick",
-          400,
-          "STRATEGY_COMPILE_FAILED",
-        );
-      }
-
-      const candles = await marketService.getCandles(
-        run.symbol,
-        interval,
-        exchange,
+      const sandboxed = this.strategies.get(strategy);
+      const bars = candlesToBars(
+        await marketService.getCandles(run.symbol, interval, exchange),
       );
-      const bars = candlesToBars(candles);
-      const nowSec = Math.floor(Date.now() / 1000);
-      const lastProcessedSec = run.lastProcessedBarTime
-        ? Math.floor(run.lastProcessedBarTime.getTime() / 1000)
-        : 0;
 
-      const closedIndexes: number[] = [];
-      for (let i = 0; i < bars.length; i += 1) {
-        if (
-          isBarClosed(bars[i], interval, nowSec) &&
-          bars[i].time > lastProcessedSec
-        ) {
-          closedIndexes.push(i);
-        }
-      }
-
-      if (closedIndexes.length === 0) {
-        const refreshed = await updateStrategyRunState(run.id, userId, {
-          lastHeartbeatAt: new Date(),
-        });
-        return await toView(refreshed ?? run);
-      }
-
-      if (closedIndexes.length > 1) {
-        logs = pushLog(
-          logs,
-          `Catch-up: ${closedIndexes.length} closed bars since last visit`,
-        );
-      }
-
-      const queue: {
-        pending: { side: "buy" | "sell"; intent: OrderIntent } | null;
-      } = { pending: null };
-
-      let lastProcessed = run.lastProcessedBarTime;
-
-      for (let n = 0; n < closedIndexes.length; n += 1) {
-        const barIndex = closedIndexes[n];
-        const bar = bars[barIndex];
-        const isLastNew = n === closedIndexes.length - 1;
-
-        if (queue.pending) {
-          const fillPrice = bar.open;
-          logs = await this.fillIntent({
-            userId,
-            portfolioId,
-            runId: run.id,
-            symbol: run.symbol,
-            pending: queue.pending,
-            fillPrice,
-            fillBarTimeSec: bar.time,
-            useLivePrice: false,
-            protectManualPositions: run.protectManualPositions,
-            logs,
-          });
-          queue.pending = null;
-        }
-
-        await this.evaluateBar({
-          strategy: compiled.strategy,
-          params: strategy.params,
-          bars: bars.slice(0, barIndex + 1),
-          symbol: run.symbol,
+      const saved = await withTransaction((client) =>
+        this.processNewBars(client, {
           userId,
           portfolioId,
           runId: run.id,
-          protectManualPositions: run.protectManualPositions,
-          queue,
-        });
-
-        lastProcessed = new Date(bar.time * 1000);
-
-        // Trailing signal on the newest closed bar: fill at live market.
-        if (isLastNew && queue.pending) {
-          logs = await this.fillIntent({
-            userId,
-            portfolioId,
-            runId: run.id,
-            symbol: run.symbol,
-            pending: queue.pending,
-            fillPrice: bar.close,
-            fillBarTimeSec: bar.time,
-            useLivePrice: true,
-            protectManualPositions: run.protectManualPositions,
-            logs,
-          });
-          queue.pending = null;
-        }
-      }
-
-      const saved = await updateStrategyRunState(run.id, userId, {
-        lastProcessedBarTime: lastProcessed,
-        lastHeartbeatAt: new Date(),
-        lastError: null,
-        logs,
-      });
+          strategy: sandboxed,
+          params: strategy.params,
+          bars,
+          interval,
+        }),
+      );
       return await toView(saved ?? run);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Tick failed";
-      logs = pushLog(logs, `Error: ${message}`);
+      const current =
+        (await findRunningStrategyRun(portfolioId, userId)) ?? run;
       const saved = await updateStrategyRunState(run.id, userId, {
         lastHeartbeatAt: new Date(),
         lastError: message,
-        logs,
+        logs: pushLog(current.logs, `Error: ${message}`),
       });
       return await toView(saved ?? run);
     }
   }
 
-  private async evaluateBar(input: {
-    strategy: StrategyFn;
-    params: StrategyParams;
-    bars: StrategyBar[];
-    symbol: string;
-    userId: string;
-    portfolioId: string;
-    runId: string;
-    protectManualPositions: boolean;
-    queue: {
-      pending: { side: "buy" | "sell"; intent: OrderIntent } | null;
+  private async processNewBars(
+    client: PoolClient,
+    input: {
+      userId: string;
+      portfolioId: string;
+      runId: string;
+      strategy: SandboxedStrategy;
+      params: StrategyParams;
+      bars: StrategyBar[];
+      interval: string;
+    },
+  ): Promise<StrategyRunRecord | null> {
+    const { userId, portfolioId, bars, interval } = input;
+
+    const run = await findStrategyRunForUpdate(client, input.runId, userId);
+    if (!run || run.status !== "running") {
+      return run;
+    }
+
+    const nowSec = Math.floor(Date.now() / 1000);
+    const lastProcessedSec = run.lastProcessedBarTime
+      ? Math.floor(run.lastProcessedBarTime.getTime() / 1000)
+      : 0;
+
+    const closedIndexes: number[] = [];
+    for (let i = 0; i < bars.length; i += 1) {
+      if (isBarClosed(bars[i], interval, nowSec) && bars[i].time > lastProcessedSec) {
+        closedIndexes.push(i);
+      }
+    }
+
+    if (closedIndexes.length === 0) {
+      return updateStrategyRunState(
+        run.id,
+        userId,
+        { lastHeartbeatAt: new Date() },
+        client,
+      );
+    }
+
+    let logs = [...run.logs];
+    if (closedIndexes.length > 1) {
+      logs = pushLog(
+        logs,
+        `Catch-up: ${closedIndexes.length} closed bars since last visit`,
+      );
+    }
+
+    const fillBase = {
+      client,
+      userId,
+      portfolioId,
+      runId: run.id,
+      symbol: run.symbol,
+      protectManualPositions: run.protectManualPositions,
     };
-  }): Promise<void> {
+    let pending: PendingOrder | null = null;
+    let lastProcessed = run.lastProcessedBarTime;
+
+    for (let n = 0; n < closedIndexes.length; n += 1) {
+      const barIndex = closedIndexes[n];
+      const bar = bars[barIndex];
+      const isLastNew = n === closedIndexes.length - 1;
+
+      if (pending) {
+        logs = await this.fillIntent({
+          ...fillBase,
+          pending,
+          fillPrice: bar.open,
+          fillBarTimeSec: bar.time,
+          useLivePrice: false,
+          logs,
+        });
+        pending = null;
+      }
+
+      pending = await this.evaluateBar(client, {
+        strategy: input.strategy,
+        params: input.params,
+        bars,
+        barIndex,
+        symbol: run.symbol,
+        userId,
+        portfolioId,
+        runId: run.id,
+        protectManualPositions: run.protectManualPositions,
+      });
+
+      lastProcessed = new Date(bar.time * 1000);
+
+      // Trailing signal on the newest closed bar: fill at live market.
+      if (isLastNew && pending) {
+        logs = await this.fillIntent({
+          ...fillBase,
+          pending,
+          fillPrice: bar.close,
+          fillBarTimeSec: bar.time,
+          useLivePrice: true,
+          logs,
+        });
+        pending = null;
+      }
+    }
+
+    return updateStrategyRunState(
+      run.id,
+      userId,
+      {
+        lastProcessedBarTime: lastProcessed,
+        lastHeartbeatAt: new Date(),
+        lastError: null,
+        logs,
+      },
+      client,
+    );
+  }
+
+  /** Evaluate the strategy on bars[0..barIndex]; returns the order it queued, if any. */
+  private async evaluateBar(
+    client: PoolClient,
+    input: {
+      strategy: SandboxedStrategy;
+      params: StrategyParams;
+      bars: StrategyBar[];
+      barIndex: number;
+      symbol: string;
+      userId: string;
+      portfolioId: string;
+      runId: string;
+      protectManualPositions: boolean;
+    },
+  ): Promise<PendingOrder | null> {
     const portfolio = await portfolioService.requireOwnedPortfolio(
       input.userId,
       input.portfolioId,
+      {},
+      client,
     );
-    const positions = await findPositionsByPortfolioId(input.portfolioId);
+    const positions = await findPositionsByPortfolioId(input.portfolioId, client);
     const position = positions.find((p) => p.symbol === input.symbol);
-    const price = input.bars[input.bars.length - 1]?.close ?? 0;
+    const price = input.bars[input.barIndex].close;
     const bookSize = position?.quantity ?? 0;
-    const strategySize = await netStrategyRunQuantity(
-      input.runId,
-      input.symbol,
-    );
-    const visibleSize = input.protectManualPositions ? strategySize : bookSize;
-    const averageCost =
-      input.protectManualPositions && strategySize > 0
-        ? await strategyRunAverageCost(input.runId, input.symbol)
-        : (position?.averageCost ?? 0);
+    const runHolding = input.protectManualPositions
+      ? await strategyRunHolding(client, input.runId, input.symbol)
+      : null;
+    const visibleSize = runHolding ? runHolding.quantity : bookSize;
+    const averageCost = runHolding
+      ? runHolding.averageCost
+      : (position?.averageCost ?? 0);
     const cash = portfolio.cashBalance;
-    const allMarked =
-      cash +
-      positions.reduce((sum, p) => {
-        if (p.symbol === input.symbol) return sum + p.quantity * price;
-        return sum + p.quantity * p.averageCost;
-      }, 0);
+    const equity = markEquity(cash, positions, input.symbol, price);
     const unrealizedPnL =
       visibleSize > 0 ? (price - averageCost) * visibleSize : 0;
-    const indicators = createIndicators();
 
-    const ctx = {
-      symbol: input.symbol,
-      bars: input.bars,
-      price,
-      position: {
+    let pending: PendingOrder | null = null;
+    input.strategy.evaluate(
+      {
         symbol: input.symbol,
-        size: visibleSize,
-        averageCost,
-        unrealizedPnL,
-      },
-      cash,
-      equity: allMarked,
-      portfolio: {
+        bars: input.bars,
+        barCount: input.barIndex + 1,
+        price,
+        position: {
+          symbol: input.symbol,
+          size: visibleSize,
+          averageCost,
+          unrealizedPnL,
+        },
         cash,
-        equity: allMarked,
-        positions: positions.map((p) => ({
-          symbol: p.symbol,
-          size: p.quantity,
-          averageCost: p.averageCost,
-          unrealizedPnL:
-            p.symbol === input.symbol
-              ? bookSize > 0 && position
-                ? (price - position.averageCost) * bookSize
-                : 0
-              : 0,
-        })),
+        equity,
+        portfolio: {
+          cash,
+          equity,
+          positions: positions.map((p) => ({
+            symbol: p.symbol,
+            size: p.quantity,
+            averageCost: p.averageCost,
+            unrealizedPnL:
+              p.symbol === input.symbol ? (price - p.averageCost) * p.quantity : 0,
+          })),
+        },
+        params: input.params,
       },
-      params: input.params,
-      buy(order: OrderIntent = {}) {
-        input.queue.pending = { side: "buy", intent: order };
+      {
+        buy(intent) {
+          pending = { side: "buy", intent };
+        },
+        sell(intent) {
+          pending = { side: "sell", intent };
+        },
+        log() {
+          // Strategy logs during live ticks are omitted to keep run logs trade-focused.
+        },
       },
-      sell(order: OrderIntent = {}) {
-        input.queue.pending = { side: "sell", intent: order };
-      },
-      indicator: indicators,
-      log() {
-        // Strategy logs during live ticks are omitted to keep run logs trade-focused.
-      },
-    };
-
-    input.strategy(ctx);
+    );
+    return pending;
   }
 
   private async fillIntent(input: {
+    client: PoolClient;
     userId: string;
     portfolioId: string;
     runId: string;
     symbol: string;
-    pending: { side: "buy" | "sell"; intent: OrderIntent };
+    pending: PendingOrder;
     fillPrice: number;
     /** Unix seconds for the candle this fill belongs to (for chart markers). */
     fillBarTimeSec: number;
@@ -628,19 +653,27 @@ export class LiveRunnerService {
     protectManualPositions: boolean;
     logs: string[];
   }): Promise<string[]> {
-    const logs = input.logs;
+    const { client, logs } = input;
     const portfolio = await portfolioService.requireOwnedPortfolio(
       input.userId,
       input.portfolioId,
+      {},
+      client,
     );
-    const positions = await findPositionsByPortfolioId(input.portfolioId);
+    const positions = await findPositionsByPortfolioId(input.portfolioId, client);
     const position = positions.find((p) => p.symbol === input.symbol);
     const cash = portfolio.cashBalance;
     const positionSize = position?.quantity ?? 0;
     const price = input.fillPrice;
-    const equity = cash + positionSize * price;
+    const equity = markEquity(cash, positions, input.symbol, price);
     const executedAt = new Date(input.fillBarTimeSec * 1000);
+    const order = {
+      symbol: input.symbol,
+      strategyRunId: input.runId,
+      executedAt,
+    };
 
+    // Trading runs in a savepoint: a rejected fill is logged and the tick continues.
     try {
       if (input.pending.side === "buy") {
         const qty = resolveBuyQty(input.pending.intent, cash, equity, price);
@@ -648,41 +681,35 @@ export class LiveRunnerService {
           return pushLog(logs, "buy skipped — zero quantity");
         }
         if (input.useLivePrice) {
-          await tradingService.executeBuy(input.userId, input.portfolioId, {
-            symbol: input.symbol,
-            quantity: qty,
-            strategyRunId: input.runId,
-            executedAt,
-          });
-          return pushLog(
-            logs,
-            `live buy ${qty.toFixed(6)} ${input.symbol}`,
+          await tradingService.executeBuy(
+            input.userId,
+            input.portfolioId,
+            { ...order, quantity: qty },
+            client,
           );
+          return pushLog(logs, `live buy ${qty.toFixed(6)} ${input.symbol}`);
         }
-        await tradingService.executeBuyAtPrice(input.userId, input.portfolioId, {
-          symbol: input.symbol,
-          quantity: qty,
-          price,
-          strategyRunId: input.runId,
-          executedAt,
-        });
+        await tradingService.executeBuyAtPrice(
+          input.userId,
+          input.portfolioId,
+          { ...order, quantity: qty, price },
+          client,
+        );
         return pushLog(
           logs,
           `catch-up buy ${qty.toFixed(6)} ${input.symbol} @ ${price.toFixed(2)}`,
         );
       }
 
-      const runNet = await netStrategyRunQuantity(input.runId, input.symbol);
+      const runNet = input.protectManualPositions
+        ? (await strategyRunHolding(client, input.runId, input.symbol)).quantity
+        : positionSize;
       const requestedQty =
         input.pending.intent.quantity !== undefined &&
         Number.isFinite(input.pending.intent.quantity)
           ? input.pending.intent.quantity
-          : input.protectManualPositions
-            ? runNet
-            : positionSize;
-      const qty = input.protectManualPositions
-        ? Math.min(requestedQty, positionSize, runNet)
-        : Math.min(requestedQty, positionSize);
+          : runNet;
+      const qty = Math.min(requestedQty, positionSize, runNet);
       if (qty <= 0) {
         return pushLog(
           logs,
@@ -692,32 +719,27 @@ export class LiveRunnerService {
         );
       }
       if (input.useLivePrice) {
-        await tradingService.executeSell(input.userId, input.portfolioId, {
-          symbol: input.symbol,
-          quantity: qty,
-          strategyRunId: input.runId,
-          executedAt,
-        });
-        return pushLog(
-          logs,
-          `live sell ${qty.toFixed(6)} ${input.symbol}`,
+        await tradingService.executeSell(
+          input.userId,
+          input.portfolioId,
+          { ...order, quantity: qty },
+          client,
         );
+        return pushLog(logs, `live sell ${qty.toFixed(6)} ${input.symbol}`);
       }
-      await tradingService.executeSellAtPrice(input.userId, input.portfolioId, {
-        symbol: input.symbol,
-        quantity: qty,
-        price,
-        strategyRunId: input.runId,
-        executedAt,
-      });
+      await tradingService.executeSellAtPrice(
+        input.userId,
+        input.portfolioId,
+        { ...order, quantity: qty, price },
+        client,
+      );
       return pushLog(
         logs,
         `catch-up sell ${qty.toFixed(6)} ${input.symbol} @ ${price.toFixed(2)}`,
       );
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Fill failed";
-      return pushLog(logs, `fill skipped — ${message}`);
+      if (!(error instanceof AppError)) throw error;
+      return pushLog(logs, `fill skipped — ${error.message}`);
     }
   }
 }

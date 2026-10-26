@@ -1,4 +1,5 @@
-import { pool } from "../config/database.js";
+import type { PoolClient } from "pg";
+import { pool, type Queryable } from "../config/database.js";
 import type { PreferredExchange } from "../types/settings.js";
 import type { StrategyTimeframe } from "../types/strategy.js";
 import type {
@@ -65,13 +66,30 @@ const RUN_SELECT = `id, user_id, portfolio_id, strategy_id, strategy_name, symbo
 export async function findRunningStrategyRun(
   portfolioId: string,
   userId: string,
+  db: Queryable = pool,
 ): Promise<StrategyRunRecord | null> {
-  const result = await pool.query<StrategyRunRow>(
+  const result = await db.query<StrategyRunRow>(
     `SELECT ${RUN_SELECT}
      FROM strategy_runs
      WHERE portfolio_id = $1 AND user_id = $2 AND status = 'running'
      LIMIT 1`,
     [portfolioId, userId],
+  );
+  return result.rows[0] ? mapStrategyRun(result.rows[0]) : null;
+}
+
+/** Lock a run row for the rest of the transaction (serialises ticks for that run). */
+export async function findStrategyRunForUpdate(
+  client: PoolClient,
+  runId: string,
+  userId: string,
+): Promise<StrategyRunRecord | null> {
+  const result = await client.query<StrategyRunRow>(
+    `SELECT ${RUN_SELECT}
+     FROM strategy_runs
+     WHERE id = $1 AND user_id = $2
+     FOR UPDATE`,
+    [runId, userId],
   );
   return result.rows[0] ? mapStrategyRun(result.rows[0]) : null;
 }
@@ -167,8 +185,9 @@ export async function updateStrategyRunState(
     lastError?: string | null;
     logs?: string[];
   },
+  db: Queryable = pool,
 ): Promise<StrategyRunRecord | null> {
-  const result = await pool.query<StrategyRunRow>(
+  const result = await db.query<StrategyRunRow>(
     `UPDATE strategy_runs SET
        last_processed_bar_time = CASE
          WHEN $3::boolean THEN $4
