@@ -50,4 +50,16 @@ export function getExchange(name?: ExchangeName | string): Exchange {
   return instance;
 }
 
+/** Replace (or with `undefined`, reset) the adapter used for `name`. Intended for tests. */
+export function setExchangeInstance(
+  name: ExchangeName,
+  exchange: Exchange | undefined,
+): void {
+  if (exchange) {
+    exchangeInstances.set(name, exchange);
+  } else {
+    exchangeInstances.delete(name);
+  }
+}
+
 export type { Exchange } from "./types.js";

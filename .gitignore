@@ -30,3 +30,7 @@ coverage/
 
 # TypeScript
 *.tsbuildinfo
+
+# Local scratch output
+output/
+tmp/

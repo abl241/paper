@@ -3,6 +3,7 @@ import { authService } from "../services/auth/auth.service.js";
 import { AppError } from "../types/api.js";
 
 declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace -- Express augments Request via this global namespace
   namespace Express {
     interface Request {
       user?: import("../types/auth.js").AuthTokenPayload;

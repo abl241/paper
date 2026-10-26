@@ -7,8 +7,10 @@
     "dev": "tsx watch src/index.ts",
     "build": "npx tsc && mkdir -p dist/db/migrations && cp src/db/migrations/*.sql dist/db/migrations/",
     "start": "node dist/index.js",
-    "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test src/services/trading/portfolioMath.test.ts"
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
+    "test": "npm run test:unit && npm run test:integration",
+    "test:unit": "node --import tsx --import ./test/helpers/env.ts --test test/unit/*.test.ts",
+    "test:integration": "node --import tsx --import ./test/helpers/env.ts --test --test-concurrency=1 test/integration/*.test.ts"
   },
   "dependencies": {
     "bcrypt": "^5.1.1",

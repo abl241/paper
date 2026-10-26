@@ -203,7 +203,7 @@ export function compileStrategy(
 
   try {
     const runnable = prepareRunnableSource(sourceCode.trim());
-    // eslint-disable-next-line no-new-func -- intentional sandbox of user strategy
+    // Intentional: evaluates user strategy source (replaced by isolated-vm in Phase 1).
     const factory = new Function(
       `"use strict";\n${runnable}\n; if (typeof strategy !== "function") throw new Error("strategy export missing"); return strategy;`,
     );

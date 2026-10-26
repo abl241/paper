@@ -152,6 +152,19 @@ npm run dev                     # API on :3001, UI on :5173
 
 Vite reads env from the repo root (see `frontend/vite.config.ts`). Migrations apply automatically when the backend starts.
 
+### Tests and checks
+
+Integration tests need a Postgres database whose name ends in `_test` (the suite truncates every table). By default they use `postgresql://paper:paper@localhost:5433/paper_test`, which `docker compose up -d` provides. To use another server, set `TEST_DATABASE_URL`.
+
+```bash
+docker compose up -d            # throwaway test Postgres on :5433
+npm test                        # backend unit + integration tests
+npm run lint
+npm run typecheck
+```
+
+Tests marked `# TODO` are known bugs with a failing test already in place; they don't fail the run. CI (`.github/workflows/ci.yml`) runs typecheck, lint, tests and build on every push and PR.
+
 ---
 
 ## Reading the code
