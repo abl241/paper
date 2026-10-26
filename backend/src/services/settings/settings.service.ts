@@ -1,3 +1,4 @@
+import type { Queryable } from "../../config/database.js";
 import {
   createSettings,
   findSettingsByUserId,
@@ -90,8 +91,8 @@ function isValidClockFormat(value: unknown): value is ClockFormat {
 }
 
 export class SettingsService {
-  async initialize(userId: string): Promise<PublicSettings> {
-    const existing = await findSettingsByUserId(userId);
+  async initialize(userId: string, db?: Queryable): Promise<PublicSettings> {
+    const existing = await findSettingsByUserId(userId, db);
     if (existing) {
       return toPublicSettings(existing);
     }
@@ -104,6 +105,7 @@ export class SettingsService {
       DEFAULT_EQUITY_Y_AXIS,
       DEFAULT_EQUITY_DEFAULT_RANGE,
       DEFAULT_CLOCK_FORMAT,
+      db,
     );
     return toPublicSettings(created);
   }

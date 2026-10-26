@@ -1,4 +1,4 @@
-import { pool } from "../config/database.js";
+import { pool, type Queryable } from "../config/database.js";
 import type {
   ClockFormat,
   EquityDefaultRange,
@@ -40,8 +40,9 @@ const SELECT_COLS = `user_id, price_refresh_ms, exchange, equity_resolution,
 
 export async function findSettingsByUserId(
   userId: string,
+  db: Queryable = pool,
 ): Promise<UserSettings | null> {
-  const result = await pool.query<SettingsRow>(
+  const result = await db.query<SettingsRow>(
     `SELECT ${SELECT_COLS}
      FROM settings
      WHERE user_id = $1`,
@@ -59,8 +60,9 @@ export async function createSettings(
   equityYAxis: EquityYAxis,
   equityDefaultRange: EquityDefaultRange,
   clockFormat: ClockFormat,
+  db: Queryable = pool,
 ): Promise<UserSettings> {
-  const result = await pool.query<SettingsRow>(
+  const result = await db.query<SettingsRow>(
     `INSERT INTO settings (
        user_id, price_refresh_ms, exchange,
        equity_resolution, equity_y_axis, equity_default_range, clock_format

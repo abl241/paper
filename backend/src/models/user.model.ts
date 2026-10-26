@@ -1,4 +1,4 @@
-import { pool } from "../config/database.js";
+import { pool, type Queryable } from "../config/database.js";
 import type { User } from "../types/auth.js";
 
 interface UserRow {
@@ -63,8 +63,8 @@ export async function createUser(input: {
   username: string;
   email: string;
   passwordHash: string;
-}): Promise<User> {
-  const result = await pool.query<UserRow>(
+}, db: Queryable = pool): Promise<User> {
+  const result = await db.query<UserRow>(
     `INSERT INTO users (username, email, password_hash, email_verified)
      VALUES ($1, $2, $3, TRUE)
      RETURNING ${USER_COLUMNS}`,

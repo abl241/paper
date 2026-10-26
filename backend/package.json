@@ -4,19 +4,21 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "NODE_OPTIONS=--no-node-snapshot tsx watch src/index.ts",
     "build": "npx tsc && mkdir -p dist/db/migrations && cp src/db/migrations/*.sql dist/db/migrations/",
-    "start": "node dist/index.js",
+    "start": "node --no-node-snapshot dist/index.js",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
     "test": "npm run test:unit && npm run test:integration",
-    "test:unit": "node --import tsx --import ./test/helpers/env.ts --test test/unit/*.test.ts",
-    "test:integration": "node --import tsx --import ./test/helpers/env.ts --test --test-concurrency=1 test/integration/*.test.ts"
+    "test:unit": "node --no-node-snapshot --import tsx --import ./test/helpers/env.ts --test test/unit/*.test.ts",
+    "test:integration": "node --no-node-snapshot --import tsx --import ./test/helpers/env.ts --test --test-concurrency=1 test/integration/*.test.ts"
   },
   "dependencies": {
     "bcrypt": "^5.1.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
+    "esbuild": "^0.25.12",
     "express": "^4.21.2",
+    "isolated-vm": "^5.0.4",
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.13.1",
     "ws": "^8.18.0"

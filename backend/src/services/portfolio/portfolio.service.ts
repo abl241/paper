@@ -1,5 +1,5 @@
 import { config } from "../../config/index.js";
-import { pool } from "../../config/database.js";
+import { type Queryable, withTransaction } from "../../config/database.js";
 import { insertCashLedger } from "../../models/cash-ledger.model.js";
 import {
   archivePortfolio,
@@ -54,23 +54,24 @@ function toListItem(portfolio: PortfolioRecord): PortfolioListItem {
 }
 
 export class PortfolioService {
-  async ensureDefaultPortfolio(userId: string): Promise<PortfolioRecord> {
-    const existing = await findDefaultPortfolio(userId);
+  async ensureDefaultPortfolio(
+    userId: string,
+    db?: Queryable,
+  ): Promise<PortfolioRecord> {
+    const existing = await findDefaultPortfolio(userId, db);
     if (existing) {
       return existing;
     }
 
-    return createPortfolio({
-      userId,
-      name: "Main",
-      startingCash: config.startingCashBalance,
-      isDefault: true,
-    });
-  }
-
-  /** @deprecated alias for register/bootstrap */
-  async initializeAccount(userId: string): Promise<void> {
-    await this.ensureDefaultPortfolio(userId);
+    return createPortfolio(
+      {
+        userId,
+        name: "Main",
+        startingCash: config.startingCashBalance,
+        isDefault: true,
+      },
+      db,
+    );
   }
 
   async listPortfolios(
@@ -128,8 +129,9 @@ export class PortfolioService {
     userId: string,
     portfolioId: string,
     options: { allowArchived?: boolean } = {},
+    db?: Queryable,
   ): Promise<PortfolioRecord> {
-    const portfolio = await findPortfolioForUser(portfolioId, userId);
+    const portfolio = await findPortfolioForUser(portfolioId, userId, db);
     if (!portfolio) {
       throw new AppError("Portfolio not found", 404, "PORTFOLIO_NOT_FOUND");
     }
@@ -240,20 +242,14 @@ export class PortfolioService {
     portfolioId: string,
   ): Promise<PortfolioDetail> {
     await this.requireOwnedPortfolio(userId, portfolioId);
-    const client = await pool.connect();
 
-    try {
-      await client.query("BEGIN");
+    await withTransaction(async (client) => {
       const locked = await findPortfolioForUpdate(client, portfolioId);
       if (!locked) {
         throw new AppError("Portfolio not found", 404, "PORTFOLIO_NOT_FOUND");
       }
 
-      const reset = await resetPortfolioBooks(
-        client,
-        portfolioId,
-        locked.startingCash,
-      );
+      await resetPortfolioBooks(client, portfolioId, locked.startingCash);
       await insertCashLedger(client, {
         portfolioId,
         type: "reset",
@@ -261,15 +257,9 @@ export class PortfolioService {
         balanceAfter: locked.startingCash,
         note: "Portfolio reset",
       });
-      await client.query("COMMIT");
+    });
 
-      return this.getPortfolioDetail(userId, reset.id);
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
-    }
+    return this.getPortfolioDetail(userId, portfolioId);
   }
 
   async adjustFunds(
@@ -288,10 +278,7 @@ export class PortfolioService {
       throw new AppError("Invalid funds type", 400, "INVALID_FUNDS");
     }
 
-    const client = await pool.connect();
-
-    try {
-      await client.query("BEGIN");
+    await withTransaction(async (client) => {
       const locked = await findPortfolioForUpdate(client, portfolioId);
       if (!locked) {
         throw new AppError("Portfolio not found", 404, "PORTFOLIO_NOT_FOUND");
@@ -314,13 +301,7 @@ export class PortfolioService {
         balanceAfter: nextBalance,
         note: input.note ?? null,
       });
-      await client.query("COMMIT");
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
-    }
+    });
 
     return this.getPortfolioDetail(userId, portfolioId);
   }

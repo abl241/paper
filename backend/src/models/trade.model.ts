@@ -1,5 +1,5 @@
 import type { PoolClient } from "pg";
-import { pool } from "../config/database.js";
+import { pool, type Queryable } from "../config/database.js";
 import type { Trade, TradeFilters } from "../types/portfolio.js";
 import { parseDecimal } from "../utils/decimal.js";
 
@@ -121,7 +121,7 @@ export async function findTradesByPortfolioId(
     `SELECT ${TRADE_SELECT}
      FROM trades
      WHERE ${clauses.join(" AND ")}
-     ORDER BY executed_at DESC`,
+     ORDER BY executed_at DESC, seq DESC`,
     params,
   );
 
@@ -130,12 +130,13 @@ export async function findTradesByPortfolioId(
 
 export async function findTradesByStrategyRunId(
   strategyRunId: string,
+  db: Queryable = pool,
 ): Promise<Trade[]> {
-  const result = await pool.query<TradeRow>(
+  const result = await db.query<TradeRow>(
     `SELECT ${TRADE_SELECT}
      FROM trades
      WHERE strategy_run_id = $1
-     ORDER BY executed_at DESC`,
+     ORDER BY executed_at DESC, seq DESC`,
     [strategyRunId],
   );
   return result.rows.map(mapTrade);
@@ -148,7 +149,7 @@ export async function findTradesChronological(
     `SELECT ${TRADE_SELECT}
      FROM trades
      WHERE portfolio_id = $1
-     ORDER BY executed_at ASC`,
+     ORDER BY executed_at ASC, seq ASC`,
     [portfolioId],
   );
   return result.rows.map(mapTrade);

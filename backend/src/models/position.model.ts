@@ -1,5 +1,5 @@
 import type { PoolClient } from "pg";
-import { pool } from "../config/database.js";
+import { pool, type Queryable } from "../config/database.js";
 import type { Position } from "../types/portfolio.js";
 import { parseDecimal } from "../utils/decimal.js";
 
@@ -79,8 +79,9 @@ export async function deletePosition(
 
 export async function findPositionsByPortfolioId(
   portfolioId: string,
+  db: Queryable = pool,
 ): Promise<Position[]> {
-  const result = await pool.query<PositionRow>(
+  const result = await db.query<PositionRow>(
     `SELECT id, portfolio_id, symbol, quantity, average_cost, created_at, updated_at
      FROM positions
      WHERE portfolio_id = $1
