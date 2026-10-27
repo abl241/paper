@@ -115,14 +115,11 @@ describe("authService", () => {
     assert.equal(user.email, "alice@example.com");
   });
 
-  it(
-    "missing password is a 400, not a crash",
-    { todo: "Phase 2: zod validation at the controller" },
-    async () => {
-      await assert.rejects(
-        authService.register({ username: "bob_1", email: "bob@example.com" } as RegisterInput),
-        { statusCode: 400 },
-      );
-    },
-  );
+  it("missing password is a 400, not a crash", async () => {
+    // The HTTP layer rejects this first (see http.test.ts); the service still guards direct callers.
+    await assert.rejects(
+      authService.register({ username: "bob_1", email: "bob@example.com" } as RegisterInput),
+      { statusCode: 400 },
+    );
+  });
 });

@@ -1,3 +1,4 @@
+import { BACKTEST_RANGES, type BacktestRange } from "@paper/shared";
 import type { PreferredExchange } from "../../types/settings.js";
 import type { StrategyTimeframe } from "../../types/strategy.js";
 import { AppError } from "../../types/api.js";
@@ -49,8 +50,7 @@ export function resolveBacktestInterval(
   return { interval: timeframe };
 }
 
-export const BACKTEST_RANGES = ["7d", "30d", "90d", "max"] as const;
-export type BacktestRange = (typeof BACKTEST_RANGES)[number];
+export { BACKTEST_RANGES, type BacktestRange };
 
 const RANGE_MS: Record<Exclude<BacktestRange, "max">, number> = {
   "7d": 7 * 24 * 60 * 60 * 1000,

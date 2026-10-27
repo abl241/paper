@@ -1,10 +1,13 @@
-import type { PreferredExchange } from "./settings.js";
-import type { StrategyTimeframe } from "./strategy.js";
+import type { PreferredExchange, StrategyRunStatus, StrategyTimeframe } from "@paper/shared";
 
-export type StrategyRunStatus = "running" | "stopped";
-
-/** Derived from heartbeat freshness while status is running. */
-export type StrategyRunPresence = "active" | "idle" | "stopped";
+export type {
+  StartStrategyRunInput,
+  StrategyRunPresence,
+  StrategyRunStats,
+  StrategyRunStatus,
+  StrategyRunTrade,
+  StrategyRunView,
+} from "@paper/shared";
 
 export interface StrategyRunRecord {
   id: string;
@@ -24,51 +27,4 @@ export interface StrategyRunRecord {
   protectManualPositions: boolean;
   createdAt: Date;
   updatedAt: Date;
-}
-
-export interface StrategyRunTrade {
-  id: string;
-  symbol: string;
-  side: "buy" | "sell";
-  quantity: number;
-  executionPrice: number;
-  realizedPnL: number | null;
-  executedAt: string;
-}
-
-export interface StrategyRunStats {
-  tradeCount: number;
-  buyCount: number;
-  sellCount: number;
-  realizedPnL: number;
-  winRate: number | null;
-  closedTrades: number;
-}
-
-export interface StrategyRunView {
-  id: string;
-  portfolioId: string;
-  strategyId: string;
-  strategyName: string;
-  symbol: string;
-  timeframe: StrategyTimeframe;
-  exchange: PreferredExchange | null;
-  status: StrategyRunStatus;
-  presence: StrategyRunPresence;
-  lastProcessedBarTime: string | null;
-  lastHeartbeatAt: string | null;
-  lastError: string | null;
-  logs: string[];
-  trades: StrategyRunTrade[];
-  stats: StrategyRunStats;
-  protectManualPositions: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface StartStrategyRunInput {
-  strategyId: string;
-  symbol?: string;
-  /** Default true: sells only close this run's own buys. */
-  protectManualPositions?: boolean;
 }

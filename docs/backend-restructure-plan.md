@@ -108,6 +108,18 @@ Done when a strategy with `while(true){}` or `(()=>0).constructor("return proces
 
 Done when nothing is left in either `types/` folder that is shared over the wire, and both apps import from `@paper/shared`.
 
+**Status (Phase 2 PR):** items 1, 2 and 4 are done; item 3 (strategy context types and the generated
+`strategyApiDts.ts`) is still open. Differences from the plan:
+- Response DTOs are plain TypeScript types, not zod schemas: the server builds them, so runtime parsing adds cost
+  without catching anything. `backend/test/types/contract.ts` instead checks at compile time that what the backend
+  serialises (`Jsonify<T>`, Dates as strings) matches the wire types.
+- Zod lives behind `@paper/shared/schemas` so the frontend bundle stays free of it unless a form opts in.
+- The package exports `dist/` only. `npm install` builds it (`prepare`), and the root scripts rebuild it first;
+  during `npm run dev`, edits to it need `npm run build:shared`.
+- The `backend/src/types` files that remain hold DB records with `Date` fields; they re-export wire types from
+  `@paper/shared`. `frontend/src/types` keeps only UI extras (labels, `ApiError`, chart-range helpers).
+- Money stays a plain number on the wire (decision made). `decimal.js` inside `portfolioMath` is not done yet.
+
 ---
 
 ## Phase 3: Candle store and market-data layer

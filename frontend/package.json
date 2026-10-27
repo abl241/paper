@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
+    "@paper/shared": "*",
     "axios": "^1.7.9",
     "lightweight-charts": "^5.2.0",
     "monaco-editor": "^0.55.1",

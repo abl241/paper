@@ -1,58 +1,42 @@
-export const PRICE_REFRESH_OPTIONS = [0, 1000, 5000, 15000, 30000] as const;
+import type {
+  ClockFormat,
+  EquityDefaultRange,
+  EquityResolution,
+  EquityYAxis,
+  PreferredExchange,
+  PriceRefreshMs,
+} from "@paper/shared";
+import { EQUITY_RANGE_OPTIONS } from "@paper/shared";
 
-export type PriceRefreshMs = (typeof PRICE_REFRESH_OPTIONS)[number];
-
-export const EXCHANGE_OPTIONS = ["gemini", "coinbase"] as const;
-
-export type PreferredExchange = (typeof EXCHANGE_OPTIONS)[number];
-
-export const EQUITY_RESOLUTION_OPTIONS = ["15m", "1h", "6h", "1d"] as const;
-
-export type EquityResolution = (typeof EQUITY_RESOLUTION_OPTIONS)[number];
-
-export const EQUITY_Y_AXIS_OPTIONS = ["tight", "padded", "zero"] as const;
-
-export type EquityYAxis = (typeof EQUITY_Y_AXIS_OPTIONS)[number];
-
-export const EQUITY_RANGE_OPTIONS = [
-  "1D",
-  "1W",
-  "1M",
-  "3M",
-  "YTD",
-  "ALL",
-] as const;
-
-export type EquityDefaultRange = (typeof EQUITY_RANGE_OPTIONS)[number];
+export {
+  CLOCK_FORMAT_OPTIONS,
+  DEFAULT_CLOCK_FORMAT,
+  DEFAULT_EQUITY_DEFAULT_RANGE,
+  DEFAULT_EQUITY_RESOLUTION,
+  DEFAULT_EQUITY_Y_AXIS,
+  DEFAULT_EXCHANGE,
+  DEFAULT_PRICE_REFRESH_MS,
+  EQUITY_RANGE_OPTIONS,
+  EQUITY_RESOLUTION_OPTIONS,
+  EQUITY_Y_AXIS_OPTIONS,
+  EXCHANGE_OPTIONS,
+  PRICE_REFRESH_OPTIONS,
+} from "@paper/shared";
+export type {
+  ApiResponse,
+  ClockFormat,
+  EquityDefaultRange,
+  EquityResolution,
+  EquityYAxis,
+  PreferredExchange,
+  PriceRefreshMs,
+  PublicSettings as UserSettings,
+} from "@paper/shared";
 
 /** Shared timespan options for portfolio equity and market charts. */
 export const CHART_RANGE_OPTIONS = EQUITY_RANGE_OPTIONS;
 
 export type ChartRange = EquityDefaultRange;
-
-export const CLOCK_FORMAT_OPTIONS = ["12h", "24h"] as const;
-
-export type ClockFormat = (typeof CLOCK_FORMAT_OPTIONS)[number];
-
-export interface UserSettings {
-  priceRefreshMs: PriceRefreshMs;
-  exchange: PreferredExchange;
-  equityResolution: EquityResolution;
-  equityYAxis: EquityYAxis;
-  equityDefaultRange: EquityDefaultRange;
-  clockFormat: ClockFormat;
-}
-
-export interface ApiResponse<T> {
-  data: T;
-}
-
-export const DEFAULT_PRICE_REFRESH_MS: PriceRefreshMs = 1000;
-export const DEFAULT_EXCHANGE: PreferredExchange = "gemini";
-export const DEFAULT_EQUITY_RESOLUTION: EquityResolution = "1h";
-export const DEFAULT_EQUITY_Y_AXIS: EquityYAxis = "tight";
-export const DEFAULT_EQUITY_DEFAULT_RANGE: EquityDefaultRange = "1W";
-export const DEFAULT_CLOCK_FORMAT: ClockFormat = "12h";
 
 export const PRICE_REFRESH_LABELS: Record<PriceRefreshMs, string> = {
   0: "Realtime",

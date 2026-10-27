@@ -1,6 +1,23 @@
-import type { PreferredExchange } from "./settings.js";
+import type {
+  PortfolioAllocation,
+  PortfolioSummary,
+  PreferredExchange,
+  TradeSourceFilter,
+} from "@paper/shared";
 
-export type { PreferredExchange };
+export type {
+  CreatePortfolioInput,
+  EquityPoint,
+  FundsInput,
+  PerformanceStats,
+  PortfolioAllocation,
+  PortfolioListItem,
+  PortfolioSummary,
+  PreferredExchange,
+  TradeSourceFilter,
+  UpdatePortfolioInput,
+} from "@paper/shared";
+
 export interface PortfolioRecord {
   id: string;
   userId: string;
@@ -44,55 +61,12 @@ export interface Trade {
   strategyRunId: string | null;
 }
 
-export interface PortfolioSummary {
-  totalEquity: number;
-  totalUnrealizedPnL: number;
-  totalRealizedPnL: number;
-  totalReturnPct: number;
-  cashAllocationPct: number;
-}
-
-export interface PortfolioAllocation {
-  symbol: string;
-  value: number;
-  pct: number;
-}
-
 export interface PortfolioDetail {
   portfolio: PortfolioRecord;
   cashBalance: number;
   positions: PositionWithMetrics[];
   summary: PortfolioSummary;
   allocation: PortfolioAllocation[];
-}
-
-export interface PortfolioListItem {
-  id: string;
-  name: string;
-  cashBalance: number;
-  startingCash: number;
-  exchange: PreferredExchange | null;
-  isDefault: boolean;
-  archivedAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface CreatePortfolioInput {
-  name: string;
-  startingCash?: number;
-  exchange?: PreferredExchange | null;
-}
-
-export interface UpdatePortfolioInput {
-  name?: string;
-  exchange?: PreferredExchange | null;
-}
-
-export interface FundsInput {
-  type: "deposit" | "withdraw";
-  amount: number;
-  note?: string;
 }
 
 export interface CashLedgerEntry {
@@ -105,8 +79,6 @@ export interface CashLedgerEntry {
   createdAt: Date;
 }
 
-export type TradeSourceFilter = "all" | "strategy" | "manual";
-
 export interface TradeFilters {
   symbol?: string;
   side?: "buy" | "sell";
@@ -116,24 +88,3 @@ export interface TradeFilters {
   strategyRunId?: string;
 }
 
-export interface EquityPoint {
-  t: string;
-  equity: number;
-  kind: "cash_path" | "marked";
-}
-
-export interface PerformanceStats {
-  totalEquity: number;
-  startingCash: number;
-  totalReturnPct: number;
-  totalRealizedPnL: number;
-  totalUnrealizedPnL: number;
-  winRate: number | null;
-  avgWin: number | null;
-  avgLoss: number | null;
-  bestTrade: number | null;
-  worstTrade: number | null;
-  tradeCount: number;
-  closedTradeCount: number;
-  equityCurve: EquityPoint[];
-}
