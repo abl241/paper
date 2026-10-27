@@ -27,3 +27,11 @@ export function authenticate(req: Request, _res: Response, next: NextFunction): 
     next(error);
   }
 }
+
+/** The signed-in user's id; routes behind `authenticate` always have one. */
+export function requireUserId(req: Request): string {
+  if (!req.user) {
+    throw new AppError("Authentication required", 401, "UNAUTHORIZED");
+  }
+  return req.user.sub;
+}

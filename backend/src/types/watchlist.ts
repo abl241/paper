@@ -1,3 +1,5 @@
+export type { WatchlistItemWithQuote, WatchlistView } from "@paper/shared";
+
 export interface Watchlist {
   id: string;
   userId: string;
@@ -11,19 +13,4 @@ export interface WatchlistItem {
   watchlistId: string;
   symbol: string;
   createdAt: Date;
-}
-
-export interface WatchlistItemWithQuote {
-  id: string;
-  symbol: string;
-  last: number | null;
-  bid: number | null;
-  ask: number | null;
-  addedAt: string;
-}
-
-export interface WatchlistView {
-  id: string;
-  name: string;
-  items: WatchlistItemWithQuote[];
 }

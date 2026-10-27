@@ -1,11 +1,6 @@
 import type { Request, Response } from "express";
+import type { HealthResponse } from "@paper/shared";
 import { verifyDatabaseConnection } from "../config/database.js";
-
-export interface HealthResponse {
-  status: "ok" | "degraded";
-  service: "backend";
-  database: "ok" | "error";
-}
 
 export async function healthCheck(_req: Request, res: Response): Promise<void> {
   let database: HealthResponse["database"] = "ok";

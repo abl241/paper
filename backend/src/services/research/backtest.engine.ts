@@ -7,28 +7,9 @@ import type {
 import { StrategySandboxError } from "../strategy/sandbox.js";
 import { markEquity as markHoldings, resolveBuyQty } from "../strategy/sizing.js";
 
-export interface BacktestTrade {
-  time: string;
-  side: "buy" | "sell";
-  quantity: number;
-  price: number;
-  fee: number;
-}
+import type { BacktestEquityPoint, BacktestStats, BacktestTrade } from "@paper/shared";
 
-export interface BacktestEquityPoint {
-  t: string;
-  equity: number;
-  kind: "marked";
-}
-
-export interface BacktestStats {
-  totalReturnPct: number;
-  maxDrawdownPct: number;
-  tradeCount: number;
-  winRate: number;
-  endingEquity: number;
-  startingCapital: number;
-}
+export type { BacktestEquityPoint, BacktestStats, BacktestTrade };
 
 export interface BacktestEngineInput {
   strategy: SandboxedStrategy;

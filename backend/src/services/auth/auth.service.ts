@@ -1,3 +1,4 @@
+import { EMAIL_PATTERN, PASSWORD_MIN_LENGTH, USERNAME_PATTERN } from "@paper/shared";
 import bcrypt from "bcrypt";
 import jwt, { type SignOptions } from "jsonwebtoken";
 import { isUniqueViolation, withTransaction } from "../../config/database.js";
@@ -20,8 +21,6 @@ import type {
   User,
 } from "../../types/auth.js";
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const USERNAME_PATTERN = /^[a-zA-Z0-9_]{3,50}$/;
 
 function toPublicUser(user: User): PublicUser {
   return {
@@ -46,8 +45,12 @@ function validateRegisterInput(input: RegisterInput): void {
     throw new AppError("Invalid email address", 400, "INVALID_EMAIL");
   }
 
-  if (input.password.length < 8) {
-    throw new AppError("Password must be at least 8 characters", 400, "INVALID_PASSWORD");
+  if (typeof input.password !== "string" || input.password.length < PASSWORD_MIN_LENGTH) {
+    throw new AppError(
+      `Password must be at least ${PASSWORD_MIN_LENGTH} characters`,
+      400,
+      "INVALID_PASSWORD",
+    );
   }
 }
 

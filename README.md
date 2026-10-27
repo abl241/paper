@@ -118,12 +118,12 @@ Backend health check at `/health`: API status plus a PostgreSQL connectivity pro
 | Layer | |
 |-------|--|
 | Frontend | React 19, React Router, Vite, TypeScript, CSS Modules, Monaco, Lightweight Charts |
-| Backend | Node.js, Express, TypeScript, `ws` |
+| Backend | Node.js, Express 5, TypeScript, zod, `ws` |
 | Data | PostgreSQL, versioned SQL migrations |
 | Auth | JWT, bcrypt |
 | Venues | Gemini (REST + WebSocket), Coinbase (REST) |
 
-npm workspaces monorepo: `backend/` + `frontend/`.
+npm workspaces monorepo: `packages/shared/` + `backend/` + `frontend/`.
 
 ---
 
@@ -131,8 +131,9 @@ npm workspaces monorepo: `backend/` + `frontend/`.
 
 ```
 paper/
-├── backend/     # API, exchange adapters, WS broker, strategies, research, migrations
-├── frontend/    # markets, portfolio, Strategy Lab, Research, charts, settings
+├── packages/shared/  # API contract: wire types, enums, zod request schemas
+├── backend/          # API, exchange adapters, WS broker, strategies, research, migrations
+├── frontend/         # markets, portfolio, Strategy Lab, Research, charts, settings
 ├── package.json
 └── .env.example
 ```
@@ -151,6 +152,8 @@ npm run dev                     # API on :3001, UI on :5173
 ```
 
 Vite reads env from the repo root (see `frontend/vite.config.ts`). Migrations apply automatically when the backend starts.
+
+`@paper/shared` is compiled to `packages/shared/dist` on `npm install` and by the root `build`, `typecheck` and `test` scripts. After editing it while `npm run dev` is running, rebuild it with `npm run build:shared`. Deploys must build from the repo root (for example `npm ci && npm run build:shared && npm run build -w backend`) so the backend can resolve it.
 
 The strategy sandbox (`isolated-vm`) requires Node to run with `--no-node-snapshot`; the `dev`, `start` and test scripts already pass it, so start the backend through them rather than `node dist/index.js` directly.
 
@@ -177,7 +180,8 @@ Some design choices worth knowing:
 2. **Portfolios own state.** Cash, positions, and trades hang off `portfolio_id`, so strategies stay isolated. Live paper runs attach one strategy per portfolio and fill through the same book.
 3. **Paper is still strict.** Fills use bid/ask, validate quantity, and reject insufficient cash or size.
 4. **Quiet streams.** Reference-counted upstream subscriptions keep the wire quiet when nobody is watching.
-5. **Strategy API sandbox.** Lab strategies talk only to `StrategyContext`. Code is transpiled with esbuild and runs in an `isolated-vm` isolate (separate V8 heap, 32 MB cap, per-call CPU timeout), so it cannot reach Node or the host. Research and live paper runs reuse that same surface.
+5. **One API contract.** Request bodies and queries are parsed with the zod schemas in `@paper/shared/schemas` before any service runs; bad input is a 400 `INVALID_REQUEST` listing each field. Response types live in `@paper/shared`, and a compile-time check (`backend/test/types/contract.ts`) fails the typecheck if what the backend serialises drifts from them. Money stays a plain number on the wire.
+6. **Strategy API sandbox.** Lab strategies talk only to `StrategyContext`. Code is transpiled with esbuild and runs in an `isolated-vm` isolate (separate V8 heap, 32 MB cap, per-call CPU timeout), so it cannot reach Node or the host. Research and live paper runs reuse that same surface.
 
 ---
 
